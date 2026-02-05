@@ -56,11 +56,24 @@ node src/index.js export --notebook "My Notebook Name" --nopassasked
 ```
 
 ### 4. Debugging
-If you encounter issues, you can run in visible mode (default) or dump DOM snapshots.
+If you encounter issues, you can run in visible mode or dump DOM snapshots.
 
 ```bash
+# Run with a visible browser window (useful for debugging or manual login)
+node src/index.js export --notheadless
+
 # Dump HTML files for debugging
 node src/index.js export --dodump
+```
+
+> [!WARNING]
+> The `--dodump` option saves the HTML content of every page and frame encountered to disk. For large notebooks, this can consume a significant amount of disk space and create thousands of files. Use it only for troubleshooting specific issues.
+
+## Cumulative Example
+You can combine all options for a fully automated, visible, and documented run:
+
+```bash
+node src/index.js export --notebook "My Notebook Name" --nopassasked --notheadless --dodump
 ```
 
 ## Output Structure
