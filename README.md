@@ -2,6 +2,9 @@
 
 A robust, automated tool to export Microsoft OneNote notebooks into Obsidian-compatible Markdown folders. This tool preserves your notebook's hierarchy, downloads all attachments (PDFs, images, videos), and correctly resolves internal links.
 
+> [!IMPORTANT]
+> **New to the project?** Follow the [Installation Guide](INSTALLATION.md) to set up your environment on Mac, Windows, or Linux.
+
 ## Features
 
 - **Full Hierarchy Preservation**: Exports Notebooks → Section Groups → Sections → Pages.
