@@ -4,6 +4,7 @@ const { listNotebooks, openNotebook } = require('./navigator');
 const { getSections, getPages, selectSection, selectPage, getPageContent, navigateBack, isSectionLocked } = require('./scrapers');
 const { createMarkdownConverter } = require('./parser');
 const { resolveInternalLinks } = require('./linkResolver');
+const { withRetry } = require('./utils/retry');
 const readline = require('readline');
 const fs = require('fs-extra');
 const path = require('path');
@@ -11,9 +12,9 @@ const sanitize = require('sanitize-filename');
 
 
 
-// Specialized download for attachments that might need clicking (SharePoint/OneDrive)
+// Specialized download for attachments that might need clicking (SharePoint/OneDrive) with retry
 async function downloadAttachment(contentFrame, info, outputPath) {
-    try {
+    return withRetry(async () => {
         const page = contentFrame.page();
         const context = page.context();
         let url = info.src;
@@ -29,8 +30,6 @@ async function downloadAttachment(contentFrame, info, outputPath) {
                 const contentType = response.headers()['content-type'] || '';
 
                 // Allow almost any content type for attachments, but exclude HTML (pages/errors)
-                // and maybe very specific web resource types if needed.
-                // We explicitly allow application/*, text/*, image/*, video/*, audio/*
                 if (response.ok() && !contentType.includes('text/html')) {
                     await fs.writeFile(outputPath, await response.body());
                     return true;
@@ -46,55 +45,61 @@ async function downloadAttachment(contentFrame, info, outputPath) {
         const linkExists = await contentFrame.$(selector);
 
         if (linkExists) {
-            try {
-                // Listen for BOTH download and popup (if it opens in a new tab)
-                const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
-                const popupPromise = page.waitForEvent('popup', { timeout: 15000 });
+            // Listen for BOTH download and popup (if it opens in a new tab)
+            const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+            const popupPromise = page.waitForEvent('popup', { timeout: 15000 });
 
-                const clickPromise = linkExists.click({ force: true });
+            const clickPromise = linkExists.click({ force: true });
 
-                // Race the events
-                const result = await Promise.race([
-                    downloadPromise.then(d => ({ type: 'download', value: d })),
-                    popupPromise.then(p => ({ type: 'popup', value: p })),
-                    clickPromise.then(() => new Promise(r => setTimeout(() => r({ type: 'timeout' }), 5000))) // Buffer for click to register
-                ]);
+            // Race the events
+            const result = await Promise.race([
+                downloadPromise.then(d => ({ type: 'download', value: d })),
+                popupPromise.then(p => ({ type: 'popup', value: p })),
+                clickPromise.then(() => new Promise(r => setTimeout(() => r({ type: 'timeout' }), 5000)))
+            ]);
 
-                if (result.type === 'download') {
-                    await result.value.saveAs(outputPath);
-                    return true;
-                } else if (result.type === 'popup') {
-                    const popup = result.value;
-                    const popupUrl = popup.url();
-                    // If the popup opened a viewer, try forcing download there
-                    if (popupUrl.includes('sharepoint.com') || popupUrl.includes('onedrive.live.com')) {
-                        const separator = popupUrl.includes('?') ? '&' : '?';
-                        await popup.goto(popupUrl + separator + 'download=1').catch(() => null);
-                        // The goto might trigger a download
-                        try {
-                            const d = await page.waitForEvent('download', { timeout: 10000 });
-                            await d.saveAs(outputPath);
-                            await popup.close();
-                            return true;
-                        } catch (e) { }
-                    }
-                    await popup.close();
+            if (result.type === 'download') {
+                await result.value.saveAs(outputPath);
+                return true;
+            } else if (result.type === 'popup') {
+                const popup = result.value;
+                const popupUrl = popup.url();
+                // If the popup opened a viewer, try forcing download there
+                if (popupUrl.includes('sharepoint.com') || popupUrl.includes('onedrive.live.com')) {
+                    const separator = popupUrl.includes('?') ? '&' : '?';
+                    await popup.goto(popupUrl + separator + 'download=1').catch(() => null);
+                    // The goto might trigger a download
+                    try {
+                        const d = await page.waitForEvent('download', { timeout: 10000 });
+                        await d.saveAs(outputPath);
+                        await popup.close();
+                        return true;
+                    } catch (e) { }
                 }
-            } catch (clickError) {
-                console.log(chalk.gray(`      Physical download attempt failed: ${clickError.message}`));
+                await popup.close();
             }
         }
-    } catch (e) {
-        console.error(`      Error in downloadAttachment for ${info.originalName}: ${e.message}`);
-    }
 
-    // Fallback: Use direct GET request on the original URL (last resort)
-    return await downloadResource(contentFrame.page(), info.src, outputPath);
+        // Fallback: Use direct GET request on the original URL (last resort)
+        const fallbackResult = await downloadResource(contentFrame.page(), info.src, outputPath);
+        if (!fallbackResult) {
+            throw new Error(`All download strategies failed for ${info.originalName}`);
+        }
+        return fallbackResult;
+    }, {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        operationName: `Download attachment ${info.originalName}`,
+        silent: true
+    }).catch((e) => {
+        console.error(`      Error in downloadAttachment for ${info.originalName}: ${e.message}`);
+        return false;
+    });
 }
 
-// Rename and generalize to downloadResource
+// Rename and generalize to downloadResource with retry logic
 async function downloadResource(page, url, outputPath) {
-    try {
+    return withRetry(async () => {
         if (url.startsWith('data:')) {
             const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
             if (matches && matches.length === 3) {
@@ -110,12 +115,17 @@ async function downloadResource(page, url, outputPath) {
             await fs.writeFile(outputPath, await response.body());
             return true;
         } else {
-            console.error(`      Failed to download resource (HTTP ${response.status()}): ${url.substring(0, 100)}...`);
+            throw new Error(`Failed to download resource (HTTP ${response.status()}): ${url.substring(0, 100)}...`);
         }
-    } catch (e) {
+    }, {
+        maxAttempts: 3,
+        initialDelayMs: 1000,
+        operationName: `Download resource`,
+        silent: true
+    }).catch((e) => {
         console.error(`      Error downloading resource ${url.substring(0, 100)}...: ${e.message}`);
-    }
-    return false;
+        return false;
+    });
 }
 
 function waitForEnter(message) {

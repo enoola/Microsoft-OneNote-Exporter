@@ -1,4 +1,5 @@
 const chalk = require('chalk');
+const { withRetry } = require('./utils/retry');
 
 /**
  * Scrapes the list of sections and section groups from the current notebook view.
@@ -148,28 +149,35 @@ async function getPages(frame) {
 }
 
 /**
- * Selects a section by ID.
+ * Selects a section by ID with retry logic.
  * @param {object} frame 
  * @param {string} sectionId 
  */
 async function selectSection(frame, sectionId) {
-    const sectionSelector = `[id="${sectionId}"]`;
-    const wrapper = await frame.$(sectionSelector);
+    return withRetry(async () => {
+        const sectionSelector = `[id="${sectionId}"]`;
+        const wrapper = await frame.$(sectionSelector);
 
-    if (wrapper) {
-        await wrapper.scrollIntoViewIfNeeded();
+        if (wrapper) {
+            await wrapper.scrollIntoViewIfNeeded();
 
-        // Try clicking the navItem inside first
-        const navItem = await wrapper.$('.navItem');
-        if (navItem) {
-            await navItem.click();
+            // Try clicking the navItem inside first
+            const navItem = await wrapper.$('.navItem');
+            if (navItem) {
+                await navItem.click();
+            } else {
+                // Fallback to clicking the wrapper itself
+                await wrapper.click();
+            }
         } else {
-            // Fallback to clicking the wrapper itself
-            await wrapper.click();
+            throw new Error(`Section wrapper not found for ID: ${sectionId}`);
         }
-    } else {
-        throw new Error(`Section wrapper not found for ID: ${sectionId}`);
-    }
+    }, {
+        maxAttempts: 3,
+        initialDelayMs: 500,
+        operationName: 'Select section',
+        silent: true
+    });
 }
 
 /**
@@ -435,24 +443,31 @@ async function getPageContent(frame) {
 }
 
 /**
- * Selects a page by ID.
+ * Selects a page by ID with retry logic.
  * @param {object} frame 
  * @param {string} pageId 
  */
 async function selectPage(frame, pageId) {
-    const pageSelector = `[id="${pageId}"]`;
-    const wrapper = await frame.$(pageSelector);
-    if (wrapper) {
-        await wrapper.scrollIntoViewIfNeeded();
-        const navItem = await wrapper.$('.navItem');
-        if (navItem) {
-            await navItem.click();
+    return withRetry(async () => {
+        const pageSelector = `[id="${pageId}"]`;
+        const wrapper = await frame.$(pageSelector);
+        if (wrapper) {
+            await wrapper.scrollIntoViewIfNeeded();
+            const navItem = await wrapper.$('.navItem');
+            if (navItem) {
+                await navItem.click();
+            } else {
+                await wrapper.click();
+            }
         } else {
-            await wrapper.click();
+            throw new Error(`Page wrapper not found for ID: ${pageId}`);
         }
-    } else {
-        throw new Error(`Page wrapper not found for ID: ${pageId}`);
-    }
+    }, {
+        maxAttempts: 3,
+        initialDelayMs: 500,
+        operationName: 'Select page',
+        silent: true
+    });
 }
 
 /**
