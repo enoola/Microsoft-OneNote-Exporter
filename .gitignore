@@ -1,0 +1,61 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+coverage/
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# TypeScript
+*.tsbuildinfo
+
+# VSCode settings
+.vscode/
+
+# MacOS files
+.DS_Store
+
+# Linux trash
+.Trash-*
+
+# Windows
+Thumbs.db
+
+# other stuff
+auth.json
+output/
+

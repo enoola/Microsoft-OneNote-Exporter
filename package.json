@@ -1,0 +1,33 @@
+{
+    "name": "onenote-to-obsidian",
+    "version": "1.0.0",
+    "description": "Export OneNote notebooks to Obsidian-compatible Markdown using Playwright",
+    "main": "src/index.js",
+    "bin": {
+        "onenote-export": "./src/index.js"
+    },
+    "scripts": {
+        "start": "node src/index.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "onenote",
+        "obsidian",
+        "export",
+        "markdown",
+        "playwright"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "chalk": "^4.1.2",
+        "cli-progress": "^3.12.0",
+        "commander": "^14.0.3",
+        "enquirer": "^2.4.1",
+        "fs-extra": "^11.3.3",
+        "playwright": "^1.58.1",
+        "sanitize-filename": "^1.6.3",
+        "turndown": "^7.2.2",
+        "turndown-plugin-gfm": "^1.0.2"
+    }
+}
