@@ -2,143 +2,14 @@ const { Select } = require('enquirer');
 const chalk = require('chalk');
 const { listNotebooks, openNotebook } = require('./navigator');
 const { getSections, getPages, selectSection, selectPage, getPageContent, navigateBack, isSectionLocked } = require('./scrapers');
+const { createMarkdownConverter } = require('./parser');
+const { resolveInternalLinks } = require('./linkResolver');
 const readline = require('readline');
 const fs = require('fs-extra');
 const path = require('path');
-const TurndownService = require('turndown');
-const { gfm } = require('turndown-plugin-gfm');
 const sanitize = require('sanitize-filename');
 
-function initTurndown() {
-    const td = new TurndownService({
-        headingStyle: 'atx',
-        codeBlockStyle: 'fenced'
-    });
-    td.use(gfm);
 
-    // Rule to handle images with our custom data-local-src attribute (Obsidian style)
-    td.addRule('localImages', {
-        filter: (node) => node.nodeName === 'IMG' && node.getAttribute('data-local-src'),
-        replacement: (content, node) => {
-            const localId = node.getAttribute('data-local-src');
-            return `![[assets/${localId}.png]]`;
-        }
-    });
-
-    // Rule for local file attachments (Obsidian style)
-    td.addRule('localFiles', {
-        filter: (node) => node.nodeName === 'A' && node.getAttribute('data-local-file'),
-        replacement: (content, node) => {
-            const localName = node.getAttribute('data-local-file');
-            // Prefer the explicitly passed filename from scraper, falling back to text
-            const originalName = node.getAttribute('data-filename') || node.innerText.trim() || 'file';
-            const ext = originalName.includes('.') ? originalName.split('.').pop() : 'bin';
-            return `[[assets/${localName}.${ext}]]`;
-        }
-    });
-
-    // Rule for internal cross-links
-    td.addRule('internalLinks', {
-        filter: (node) => node.nodeName === 'A' && node.getAttribute('data-internal-link'),
-        replacement: (content, node) => {
-            const linkId = node.getAttribute('data-internal-link');
-            const text = node.innerText.trim();
-            // Use a specific marker for post-processing
-            return `[[${text}]]<!-- onenote-link:${linkId} -->`;
-        }
-    });
-
-    // Rule for YouTube/Vimeo embeds
-    td.addRule('embeds', {
-        filter: (node) => node.nodeName === 'IFRAME' && node.getAttribute('data-embed-id'),
-        replacement: (content, node) => {
-            const src = node.getAttribute('src');
-            // Convert embed URLs back to watch URLs if possible
-            let url = src;
-            if (src.includes('youtube.com/embed/')) {
-                url = src.replace('youtube.com/embed/', 'youtube.com/watch?v=');
-            } else if (src.includes('player.vimeo.com/video/')) {
-                url = src.replace('player.vimeo.com/video/', 'vimeo.com/');
-            }
-            return `\n\n[Video Link](${url})\n\n`;
-        }
-    });
-
-    // Rule for local videos with data-local-video (Obsidian style)
-    td.addRule('localVideos', {
-        filter: (node) => node.nodeName === 'VIDEO' && node.getAttribute('data-local-video'),
-        replacement: (content, node) => {
-            const localId = node.getAttribute('data-local-video');
-            return `\n\n![[assets/${localId}.mp4]]\n\n`;
-        }
-    });
-
-    // Rule for Strikethrough (OneNote specific)
-    td.addRule('strikethrough', {
-        filter: (node) => {
-            const classes = typeof node.className === 'string' ? node.className : '';
-            const style = node.getAttribute('style') || '';
-            return classes.includes('Strikethrough') || style.includes('text-decoration: line-through');
-        },
-        replacement: (content) => `~~${content}~~`
-    });
-
-    // Rule to ignore OneNote table junk (resize handles, hover UI, etc.)
-    td.addRule('ignoreTableJunk', {
-        filter: (node) => {
-            const classes = node.className || '';
-            // REMOVED 'RelativeElementContainer' as it often wraps images we want to keep
-            // REMOVED 'role="presentation"' as it is used for image containers
-            return classes.includes('TableHover') ||
-                classes.includes('TableInsertRowGap') ||
-                classes.includes('TableColumnHandle') ||
-                classes.includes('TableColumnWidthSpacer') ||
-                classes.includes('TableColumnResizeHandle');
-        },
-        replacement: () => ''
-    });
-
-    // Rule for OutlineContainer to ensure block separation
-    td.addRule('outlines', {
-        filter: (node) => typeof node.className === 'string' && node.className.includes('OutlineContainer'),
-        replacement: (content) => `\n\n${content}\n\n`
-    });
-
-    // Ensure table cells are treated as such even with weird roles
-    td.addRule('tableCells', {
-        filter: (node) => (node.nodeName === 'TD' || node.nodeName === 'TH') ||
-            (node.getAttribute('role') === 'rowheader' || node.getAttribute('role') === 'columnheader'),
-        replacement: function (content, node) {
-            // Trim and ensure no newlines inside cells for GFM compat
-            return '| ' + content.trim().replace(/\n/g, ' ') + ' ';
-        }
-    });
-
-    // We need a custom table row rule because OneNote doesn't always use standard table structures
-    td.addRule('tableRow', {
-        filter: 'tr',
-        replacement: function (content, node) {
-            let result = content + '|\n';
-            // If it's the first row, add the GFM separator
-            const isFirstRow = node === node.parentElement.firstElementChild;
-            if (isFirstRow) {
-                const cells = node.querySelectorAll('td, th, [role*="header"]');
-                result += '|' + Array.from(cells).map(() => ' --- ').join('|') + '|\n';
-            }
-            return result;
-        }
-    });
-
-    // Custom table rule to just wrap the content
-    td.addRule('table', {
-        filter: 'table',
-        replacement: function (content) {
-            return '\n\n' + content + '\n\n';
-        }
-    });
-
-    return td;
-}
 
 // Specialized download for attachments that might need clicking (SharePoint/OneDrive)
 async function downloadAttachment(contentFrame, info, outputPath) {
@@ -531,7 +402,7 @@ async function runExport(options = {}) {
 
             const outputBase = path.resolve(__dirname, '../output', sanitize(selectedNotebook.name));
             await fs.ensureDir(outputBase);
-            const td = initTurndown();
+            const td = createMarkdownConverter();
 
             console.log(chalk.blue('Scanning sections...'));
             // Wait for section list specifically
@@ -546,70 +417,8 @@ async function runExport(options = {}) {
             const stats = { totalPages: 0, totalAssets: 0 };
             await processSections(contentFrame, outputBase, td, options, pageIdMap, new Set(), null, stats);
 
-            // TODO: Post-process internal links using pageIdMap
             console.log(chalk.blue('\nResolving internal links...'));
-            for (const [pageId, info] of Object.entries(pageIdMap)) {
-                if (info.isDir) continue;
-
-                let content = await fs.readFile(info.path, 'utf8');
-                let modified = false;
-
-                for (const link of info.internalLinks || []) {
-                    // Try to find the target item (page, section, or group) in our map
-                    const targetId = Object.keys(pageIdMap).find(id => {
-                        // 1. Standard relaxed match (handles encoded IDs)
-                        if (link.href.includes(id) || link.href.includes(encodeURIComponent(id))) {
-                            return true;
-                        }
-
-                        // 2. Fuzzy match: OneNote IDs in DOM often look like "{UUID}{1}", 
-                        // while links might use "UUID" or "section-id={UUID}".
-                        // We strip braces and suffixes to get the core UUID.
-                        // Example: "{123-456}{1}" -> "123-456"
-                        const cleanId = id.replace(/^\{/, '').split('}')[0];
-
-                        // Only perform fuzzy string match if we have a valid-looking UUID (min length)
-                        if (cleanId.length > 20 && link.href.includes(cleanId)) {
-                            return true;
-                        }
-
-                        return false;
-                    });
-
-                    if (targetId && targetId !== pageId) {
-                        const targetInfo = pageIdMap[targetId];
-
-                        // FIX: Use path relative to the Output Base (Notebook Root)
-                        // This creates "Absolute in Vault" style links: [[Group/Section/Page]]
-                        let relPath = path.relative(outputBase, targetInfo.path);
-
-                        // Avoid .md extension for Wikilinks to files
-                        const cleanPath = targetInfo.isDir ? relPath : relPath.replace(/\.md$/, '');
-
-                        // IMPORTANT: Use a non-capturing group for the bracketed text because 
-                        // Turndown might have escaped characters (like _ to \_) inside it.
-                        // We target the unique onenote-link ID instead.
-                        const placeholderRegex = new RegExp(`\\[\\[.*?\\]\\]<!-- onenote-link:${link.id} -->`, 'g');
-
-                        content = content.replace(placeholderRegex, `[[${cleanPath}|${link.text}]]`);
-                        modified = true;
-                    }
-                }
-
-                // Cleanup: Remove any remaining onenote-link comments (for links that weren't resolved)
-                // Also remove the comments for successfully resolved links if the regex above didn't catch them all (it should have replaced the whole block)
-                // But specifically for UNRESOLVED links, we want to keep the text but remove the comment.
-                // The structure for unresolved is likely: [[Link Text]]<!-- onenote-link:id -->
-                // We just want to remove the comment part globally.
-                if (content.includes('<!-- onenote-link:')) {
-                    content = content.replace(/<!-- onenote-link:.*? -->/g, '');
-                    modified = true;
-                }
-
-                if (modified) {
-                    await fs.writeFile(info.path, content);
-                }
-            }
+            await resolveInternalLinks(pageIdMap, outputBase);
 
             console.log(chalk.bold.green('\nExport complete!'));
             console.log(chalk.white(`Total Pages: ${stats.totalPages}`));

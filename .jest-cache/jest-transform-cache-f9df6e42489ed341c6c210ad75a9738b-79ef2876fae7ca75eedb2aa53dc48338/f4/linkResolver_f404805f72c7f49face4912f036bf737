@@ -1,0 +1,72 @@
+5b1ca0e48a082cc385648ea8553b6498
+const fs = require('fs-extra');
+const path = require('path');
+
+/**
+ * Resolves internal OneNote links to Obsidian wikilinks
+ * @param {Object} pageIdMap - Map of page IDs to their metadata
+ * @param {string} outputBase - Base output directory (notebook root)
+ * @returns {Promise<void>}
+ */
+async function resolveInternalLinks(pageIdMap, outputBase) {
+  for (const [pageId, info] of Object.entries(pageIdMap)) {
+    if (info.isDir) continue;
+    let content = await fs.readFile(info.path, 'utf8');
+    let modified = false;
+    for (const link of info.internalLinks || []) {
+      // Try to find the target item (page, section, or group) in our map
+      const targetId = Object.keys(pageIdMap).find(id => {
+        // 1. Standard relaxed match (handles encoded IDs)
+        if (link.href.includes(id) || link.href.includes(encodeURIComponent(id))) {
+          return true;
+        }
+
+        // 2. Fuzzy match: OneNote IDs in DOM often look like "{UUID}{1}", 
+        // while links might use "UUID" or "section-id={UUID}".
+        // We strip braces and suffixes to get the core UUID.
+        // Example: "{123-456}{1}" -> "123-456"
+        const cleanId = id.replace(/^\{/, '').split('}')[0];
+
+        // Only perform fuzzy string match if we have a valid-looking UUID (min length)
+        if (cleanId.length > 20 && link.href.includes(cleanId)) {
+          return true;
+        }
+        return false;
+      });
+      if (targetId && targetId !== pageId) {
+        const targetInfo = pageIdMap[targetId];
+
+        // Use path relative to the Output Base (Notebook Root)
+        // This creates "Absolute in Vault" style links: [[Group/Section/Page]]
+        let relPath = path.relative(outputBase, targetInfo.path);
+
+        // Avoid .md extension for Wikilinks to files
+        const cleanPath = targetInfo.isDir ? relPath : relPath.replace(/\.md$/, '');
+
+        // IMPORTANT: Use a non-capturing group for the bracketed text because 
+        // Turndown might have escaped characters (like _ to \_) inside it.
+        // We target the unique onenote-link ID instead.
+        const placeholderRegex = new RegExp(`\\[\\[.*?\\]\\]<!-- onenote-link:${link.id} -->`, 'g');
+        content = content.replace(placeholderRegex, `[[${cleanPath}|${link.text}]]`);
+        modified = true;
+      }
+    }
+
+    // Cleanup: Remove any remaining onenote-link comments (for links that weren't resolved)
+    // Also remove the comments for successfully resolved links if the regex above didn't catch them all (it should have replaced the whole block)
+    // But specifically for UNRESOLVED links, we want to keep the text but remove the comment.
+    // The structure for unresolved is likely: [[Link Text]]<!-- onenote-link:id -->
+    // We just want to remove the comment part globally.
+    if (content.includes('<!-- onenote-link:')) {
+      content = content.replace(/<!-- onenote-link:.*? -->/g, '');
+      modified = true;
+    }
+    if (modified) {
+      await fs.writeFile(info.path, content);
+    }
+  }
+}
+module.exports = {
+  resolveInternalLinks
+};
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJmcyIsInJlcXVpcmUiLCJwYXRoIiwicmVzb2x2ZUludGVybmFsTGlua3MiLCJwYWdlSWRNYXAiLCJvdXRwdXRCYXNlIiwicGFnZUlkIiwiaW5mbyIsIk9iamVjdCIsImVudHJpZXMiLCJpc0RpciIsImNvbnRlbnQiLCJyZWFkRmlsZSIsIm1vZGlmaWVkIiwibGluayIsImludGVybmFsTGlua3MiLCJ0YXJnZXRJZCIsImtleXMiLCJmaW5kIiwiaWQiLCJocmVmIiwiaW5jbHVkZXMiLCJlbmNvZGVVUklDb21wb25lbnQiLCJjbGVhbklkIiwicmVwbGFjZSIsInNwbGl0IiwibGVuZ3RoIiwidGFyZ2V0SW5mbyIsInJlbFBhdGgiLCJyZWxhdGl2ZSIsImNsZWFuUGF0aCIsInBsYWNlaG9sZGVyUmVnZXgiLCJSZWdFeHAiLCJ0ZXh0Iiwid3JpdGVGaWxlIiwibW9kdWxlIiwiZXhwb3J0cyJdLCJzb3VyY2VzIjpbImxpbmtSZXNvbHZlci5qcyJdLCJzb3VyY2VzQ29udGVudCI6WyJjb25zdCBmcyA9IHJlcXVpcmUoJ2ZzLWV4dHJhJyk7XG5jb25zdCBwYXRoID0gcmVxdWlyZSgncGF0aCcpO1xuXG4vKipcbiAqIFJlc29sdmVzIGludGVybmFsIE9uZU5vdGUgbGlua3MgdG8gT2JzaWRpYW4gd2lraWxpbmtzXG4gKiBAcGFyYW0ge09iamVjdH0gcGFnZUlkTWFwIC0gTWFwIG9mIHBhZ2UgSURzIHRvIHRoZWlyIG1ldGFkYXRhXG4gKiBAcGFyYW0ge3N0cmluZ30gb3V0cHV0QmFzZSAtIEJhc2Ugb3V0cHV0IGRpcmVjdG9yeSAobm90ZWJvb2sgcm9vdClcbiAqIEByZXR1cm5zIHtQcm9taXNlPHZvaWQ+fVxuICovXG5hc3luYyBmdW5jdGlvbiByZXNvbHZlSW50ZXJuYWxMaW5rcyhwYWdlSWRNYXAsIG91dHB1dEJhc2UpIHtcbiAgICBmb3IgKGNvbnN0IFtwYWdlSWQsIGluZm9dIG9mIE9iamVjdC5lbnRyaWVzKHBhZ2VJZE1hcCkpIHtcbiAgICAgICAgaWYgKGluZm8uaXNEaXIpIGNvbnRpbnVlO1xuXG4gICAgICAgIGxldCBjb250ZW50ID0gYXdhaXQgZnMucmVhZEZpbGUoaW5mby5wYXRoLCAndXRmOCcpO1xuICAgICAgICBsZXQgbW9kaWZpZWQgPSBmYWxzZTtcblxuICAgICAgICBmb3IgKGNvbnN0IGxpbmsgb2YgaW5mby5pbnRlcm5hbExpbmtzIHx8IFtdKSB7XG4gICAgICAgICAgICAvLyBUcnkgdG8gZmluZCB0aGUgdGFyZ2V0IGl0ZW0gKHBhZ2UsIHNlY3Rpb24sIG9yIGdyb3VwKSBpbiBvdXIgbWFwXG4gICAgICAgICAgICBjb25zdCB0YXJnZXRJZCA9IE9iamVjdC5rZXlzKHBhZ2VJZE1hcCkuZmluZChpZCA9PiB7XG4gICAgICAgICAgICAgICAgLy8gMS4gU3RhbmRhcmQgcmVsYXhlZCBtYXRjaCAoaGFuZGxlcyBlbmNvZGVkIElEcylcbiAgICAgICAgICAgICAgICBpZiAobGluay5ocmVmLmluY2x1ZGVzKGlkKSB8fCBsaW5rLmhyZWYuaW5jbHVkZXMoZW5jb2RlVVJJQ29tcG9uZW50KGlkKSkpIHtcbiAgICAgICAgICAgICAgICAgICAgcmV0dXJuIHRydWU7XG4gICAgICAgICAgICAgICAgfVxuXG4gICAgICAgICAgICAgICAgLy8gMi4gRnV6enkgbWF0Y2g6IE9uZU5vdGUgSURzIGluIERPTSBvZnRlbiBsb29rIGxpa2UgXCJ7VVVJRH17MX1cIiwgXG4gICAgICAgICAgICAgICAgLy8gd2hpbGUgbGlua3MgbWlnaHQgdXNlIFwiVVVJRFwiIG9yIFwic2VjdGlvbi1pZD17VVVJRH1cIi5cbiAgICAgICAgICAgICAgICAvLyBXZSBzdHJpcCBicmFjZXMgYW5kIHN1ZmZpeGVzIHRvIGdldCB0aGUgY29yZSBVVUlELlxuICAgICAgICAgICAgICAgIC8vIEV4YW1wbGU6IFwiezEyMy00NTZ9ezF9XCIgLT4gXCIxMjMtNDU2XCJcbiAgICAgICAgICAgICAgICBjb25zdCBjbGVhbklkID0gaWQucmVwbGFjZSgvXlxcey8sICcnKS5zcGxpdCgnfScpWzBdO1xuXG4gICAgICAgICAgICAgICAgLy8gT25seSBwZXJmb3JtIGZ1enp5IHN0cmluZyBtYXRjaCBpZiB3ZSBoYXZlIGEgdmFsaWQtbG9va2luZyBVVUlEIChtaW4gbGVuZ3RoKVxuICAgICAgICAgICAgICAgIGlmIChjbGVhbklkLmxlbmd0aCA+IDIwICYmIGxpbmsuaHJlZi5pbmNsdWRlcyhjbGVhbklkKSkge1xuICAgICAgICAgICAgICAgICAgICByZXR1cm4gdHJ1ZTtcbiAgICAgICAgICAgICAgICB9XG5cbiAgICAgICAgICAgICAgICByZXR1cm4gZmFsc2U7XG4gICAgICAgICAgICB9KTtcblxuICAgICAgICAgICAgaWYgKHRhcmdldElkICYmIHRhcmdldElkICE9PSBwYWdlSWQpIHtcbiAgICAgICAgICAgICAgICBjb25zdCB0YXJnZXRJbmZvID0gcGFnZUlkTWFwW3RhcmdldElkXTtcblxuICAgICAgICAgICAgICAgIC8vIFVzZSBwYXRoIHJlbGF0aXZlIHRvIHRoZSBPdXRwdXQgQmFzZSAoTm90ZWJvb2sgUm9vdClcbiAgICAgICAgICAgICAgICAvLyBUaGlzIGNyZWF0ZXMgXCJBYnNvbHV0ZSBpbiBWYXVsdFwiIHN0eWxlIGxpbmtzOiBbW0dyb3VwL1NlY3Rpb24vUGFnZV1dXG4gICAgICAgICAgICAgICAgbGV0IHJlbFBhdGggPSBwYXRoLnJlbGF0aXZlKG91dHB1dEJhc2UsIHRhcmdldEluZm8ucGF0aCk7XG5cbiAgICAgICAgICAgICAgICAvLyBBdm9pZCAubWQgZXh0ZW5zaW9uIGZvciBXaWtpbGlua3MgdG8gZmlsZXNcbiAgICAgICAgICAgICAgICBjb25zdCBjbGVhblBhdGggPSB0YXJnZXRJbmZvLmlzRGlyID8gcmVsUGF0aCA6IHJlbFBhdGgucmVwbGFjZSgvXFwubWQkLywgJycpO1xuXG4gICAgICAgICAgICAgICAgLy8gSU1QT1JUQU5UOiBVc2UgYSBub24tY2FwdHVyaW5nIGdyb3VwIGZvciB0aGUgYnJhY2tldGVkIHRleHQgYmVjYXVzZSBcbiAgICAgICAgICAgICAgICAvLyBUdXJuZG93biBtaWdodCBoYXZlIGVzY2FwZWQgY2hhcmFjdGVycyAobGlrZSBfIHRvIFxcXykgaW5zaWRlIGl0LlxuICAgICAgICAgICAgICAgIC8vIFdlIHRhcmdldCB0aGUgdW5pcXVlIG9uZW5vdGUtbGluayBJRCBpbnN0ZWFkLlxuICAgICAgICAgICAgICAgIGNvbnN0IHBsYWNlaG9sZGVyUmVnZXggPSBuZXcgUmVnRXhwKGBcXFxcW1xcXFxbLio/XFxcXF1cXFxcXTwhLS0gb25lbm90ZS1saW5rOiR7bGluay5pZH0gLS0+YCwgJ2cnKTtcblxuICAgICAgICAgICAgICAgIGNvbnRlbnQgPSBjb250ZW50LnJlcGxhY2UocGxhY2Vob2xkZXJSZWdleCwgYFtbJHtjbGVhblBhdGh9fCR7bGluay50ZXh0fV1dYCk7XG4gICAgICAgICAgICAgICAgbW9kaWZpZWQgPSB0cnVlO1xuICAgICAgICAgICAgfVxuICAgICAgICB9XG5cbiAgICAgICAgLy8gQ2xlYW51cDogUmVtb3ZlIGFueSByZW1haW5pbmcgb25lbm90ZS1saW5rIGNvbW1lbnRzIChmb3IgbGlua3MgdGhhdCB3ZXJlbid0IHJlc29sdmVkKVxuICAgICAgICAvLyBBbHNvIHJlbW92ZSB0aGUgY29tbWVudHMgZm9yIHN1Y2Nlc3NmdWxseSByZXNvbHZlZCBsaW5rcyBpZiB0aGUgcmVnZXggYWJvdmUgZGlkbid0IGNhdGNoIHRoZW0gYWxsIChpdCBzaG91bGQgaGF2ZSByZXBsYWNlZCB0aGUgd2hvbGUgYmxvY2spXG4gICAgICAgIC8vIEJ1dCBzcGVjaWZpY2FsbHkgZm9yIFVOUkVTT0xWRUQgbGlua3MsIHdlIHdhbnQgdG8ga2VlcCB0aGUgdGV4dCBidXQgcmVtb3ZlIHRoZSBjb21tZW50LlxuICAgICAgICAvLyBUaGUgc3RydWN0dXJlIGZvciB1bnJlc29sdmVkIGlzIGxpa2VseTogW1tMaW5rIFRleHRdXTwhLS0gb25lbm90ZS1saW5rOmlkIC0tPlxuICAgICAgICAvLyBXZSBqdXN0IHdhbnQgdG8gcmVtb3ZlIHRoZSBjb21tZW50IHBhcnQgZ2xvYmFsbHkuXG4gICAgICAgIGlmIChjb250ZW50LmluY2x1ZGVzKCc8IS0tIG9uZW5vdGUtbGluazonKSkge1xuICAgICAgICAgICAgY29udGVudCA9IGNvbnRlbnQucmVwbGFjZSgvPCEtLSBvbmVub3RlLWxpbms6Lio/IC0tPi9nLCAnJyk7XG4gICAgICAgICAgICBtb2RpZmllZCA9IHRydWU7XG4gICAgICAgIH1cblxuICAgICAgICBpZiAobW9kaWZpZWQpIHtcbiAgICAgICAgICAgIGF3YWl0IGZzLndyaXRlRmlsZShpbmZvLnBhdGgsIGNvbnRlbnQpO1xuICAgICAgICB9XG4gICAgfVxufVxuXG5tb2R1bGUuZXhwb3J0cyA9IHsgcmVzb2x2ZUludGVybmFsTGlua3MgfTtcbiJdLCJtYXBwaW5ncyI6IkFBQUEsTUFBTUEsRUFBRSxHQUFHQyxPQUFPLENBQUMsVUFBVSxDQUFDO0FBQzlCLE1BQU1DLElBQUksR0FBR0QsT0FBTyxDQUFDLE1BQU0sQ0FBQzs7QUFFNUI7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0EsZUFBZUUsb0JBQW9CQSxDQUFDQyxTQUFTLEVBQUVDLFVBQVUsRUFBRTtFQUN2RCxLQUFLLE1BQU0sQ0FBQ0MsTUFBTSxFQUFFQyxJQUFJLENBQUMsSUFBSUMsTUFBTSxDQUFDQyxPQUFPLENBQUNMLFNBQVMsQ0FBQyxFQUFFO0lBQ3BELElBQUlHLElBQUksQ0FBQ0csS0FBSyxFQUFFO0lBRWhCLElBQUlDLE9BQU8sR0FBRyxNQUFNWCxFQUFFLENBQUNZLFFBQVEsQ0FBQ0wsSUFBSSxDQUFDTCxJQUFJLEVBQUUsTUFBTSxDQUFDO0lBQ2xELElBQUlXLFFBQVEsR0FBRyxLQUFLO0lBRXBCLEtBQUssTUFBTUMsSUFBSSxJQUFJUCxJQUFJLENBQUNRLGFBQWEsSUFBSSxFQUFFLEVBQUU7TUFDekM7TUFDQSxNQUFNQyxRQUFRLEdBQUdSLE1BQU0sQ0FBQ1MsSUFBSSxDQUFDYixTQUFTLENBQUMsQ0FBQ2MsSUFBSSxDQUFDQyxFQUFFLElBQUk7UUFDL0M7UUFDQSxJQUFJTCxJQUFJLENBQUNNLElBQUksQ0FBQ0MsUUFBUSxDQUFDRixFQUFFLENBQUMsSUFBSUwsSUFBSSxDQUFDTSxJQUFJLENBQUNDLFFBQVEsQ0FBQ0Msa0JBQWtCLENBQUNILEVBQUUsQ0FBQyxDQUFDLEVBQUU7VUFDdEUsT0FBTyxJQUFJO1FBQ2Y7O1FBRUE7UUFDQTtRQUNBO1FBQ0E7UUFDQSxNQUFNSSxPQUFPLEdBQUdKLEVBQUUsQ0FBQ0ssT0FBTyxDQUFDLEtBQUssRUFBRSxFQUFFLENBQUMsQ0FBQ0MsS0FBSyxDQUFDLEdBQUcsQ0FBQyxDQUFDLENBQUMsQ0FBQzs7UUFFbkQ7UUFDQSxJQUFJRixPQUFPLENBQUNHLE1BQU0sR0FBRyxFQUFFLElBQUlaLElBQUksQ0FBQ00sSUFBSSxDQUFDQyxRQUFRLENBQUNFLE9BQU8sQ0FBQyxFQUFFO1VBQ3BELE9BQU8sSUFBSTtRQUNmO1FBRUEsT0FBTyxLQUFLO01BQ2hCLENBQUMsQ0FBQztNQUVGLElBQUlQLFFBQVEsSUFBSUEsUUFBUSxLQUFLVixNQUFNLEVBQUU7UUFDakMsTUFBTXFCLFVBQVUsR0FBR3ZCLFNBQVMsQ0FBQ1ksUUFBUSxDQUFDOztRQUV0QztRQUNBO1FBQ0EsSUFBSVksT0FBTyxHQUFHMUIsSUFBSSxDQUFDMkIsUUFBUSxDQUFDeEIsVUFBVSxFQUFFc0IsVUFBVSxDQUFDekIsSUFBSSxDQUFDOztRQUV4RDtRQUNBLE1BQU00QixTQUFTLEdBQUdILFVBQVUsQ0FBQ2pCLEtBQUssR0FBR2tCLE9BQU8sR0FBR0EsT0FBTyxDQUFDSixPQUFPLENBQUMsT0FBTyxFQUFFLEVBQUUsQ0FBQzs7UUFFM0U7UUFDQTtRQUNBO1FBQ0EsTUFBTU8sZ0JBQWdCLEdBQUcsSUFBSUMsTUFBTSxDQUFDLG9DQUFvQ2xCLElBQUksQ0FBQ0ssRUFBRSxNQUFNLEVBQUUsR0FBRyxDQUFDO1FBRTNGUixPQUFPLEdBQUdBLE9BQU8sQ0FBQ2EsT0FBTyxDQUFDTyxnQkFBZ0IsRUFBRSxLQUFLRCxTQUFTLElBQUloQixJQUFJLENBQUNtQixJQUFJLElBQUksQ0FBQztRQUM1RXBCLFFBQVEsR0FBRyxJQUFJO01BQ25CO0lBQ0o7O0lBRUE7SUFDQTtJQUNBO0lBQ0E7SUFDQTtJQUNBLElBQUlGLE9BQU8sQ0FBQ1UsUUFBUSxDQUFDLG9CQUFvQixDQUFDLEVBQUU7TUFDeENWLE9BQU8sR0FBR0EsT0FBTyxDQUFDYSxPQUFPLENBQUMsNEJBQTRCLEVBQUUsRUFBRSxDQUFDO01BQzNEWCxRQUFRLEdBQUcsSUFBSTtJQUNuQjtJQUVBLElBQUlBLFFBQVEsRUFBRTtNQUNWLE1BQU1iLEVBQUUsQ0FBQ2tDLFNBQVMsQ0FBQzNCLElBQUksQ0FBQ0wsSUFBSSxFQUFFUyxPQUFPLENBQUM7SUFDMUM7RUFDSjtBQUNKO0FBRUF3QixNQUFNLENBQUNDLE9BQU8sR0FBRztFQUFFakM7QUFBcUIsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==
