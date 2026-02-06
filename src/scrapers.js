@@ -103,6 +103,7 @@ async function getSections(frame, parentId = null) {
             results.push({ id, name, type: isGroup ? 'group' : 'section' });
         });
 
+
         return results;
     }, parentId);
 }
@@ -144,6 +145,7 @@ async function getPages(frame) {
             }
             return { id, name };
         });
+
     });
     return pages;
 }
@@ -299,14 +301,29 @@ async function getPageContent(frame) {
 
         // 3. Extract File Attachments and Internal Links
         const allLinks = Array.from(contentDiv.querySelectorAll('a'));
-        allLinks.forEach(link => {
+        allLinks.forEach((link, idx) => {
             let href = link.getAttribute('href') || '';
             const text = link.innerText.trim();
             const className = link.className || '';
 
             // Detect Internal OneNote Links
-            const isInternal = href.includes('onenote:') ||
-                (href.includes('view.aspx') && (href.includes('page-id=') || href.includes('section-id=')));
+            // OneNote uses various formats for internal links:
+            // 1. onenote:https://... or onenote:/// protocol
+            // 2. view.aspx?page-id=... or section-id=...
+            // 3. Links starting with # (anchor/fragment-only)
+            // 4. Links with no href or empty href (most common for internal links!)
+            // 5. Links without http protocol (relative links)
+            // 6. Full URLs to OneNote/SharePoint domains
+            const isOneNoteUrl = href.includes('onenote.') ||
+                href.includes('.officeapps.live.com') ||
+                href.includes('.sharepoint.com') ||
+                href.includes('view.aspx');
+
+            const isInternal = !href ||  // No href attribute or empty href
+                href === '#' ||  // Just an anchor
+                href.includes('onenote:') ||
+                isOneNoteUrl ||
+                (!href.startsWith('http') && !href.startsWith('//') && !href.startsWith('mailto:') && !href.startsWith('file:') && !href.startsWith('data:'));
 
             if (isInternal) {
                 const linkId = `link_${internalLinks.length}`;

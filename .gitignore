@@ -58,4 +58,4 @@ Thumbs.db
 # other stuff
 auth.json
 output/
-
+debug_*

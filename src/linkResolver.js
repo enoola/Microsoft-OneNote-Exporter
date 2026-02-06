@@ -16,7 +16,10 @@ async function resolveInternalLinks(pageIdMap, outputBase) {
 
         for (const link of info.internalLinks || []) {
             // Try to find the target item (page, section, or group) in our map
-            const targetId = Object.keys(pageIdMap).find(id => {
+            let targetId = Object.keys(pageIdMap).find(id => {
+                // Ignore empty or invalid IDs
+                if (!id || id === 'undefined' || id === 'null') return false;
+
                 // 1. Standard relaxed match (handles encoded IDs)
                 if (link.href.includes(id) || link.href.includes(encodeURIComponent(id))) {
                     return true;
@@ -35,6 +38,40 @@ async function resolveInternalLinks(pageIdMap, outputBase) {
 
                 return false;
             });
+
+            // 3. Fallback: Path-based matching for onenote: links (User suggestion)
+            // Example page: onenote:Group\Section.one#Page&...
+            // Example section: onenote:Section.one#section-id={...}&end
+            if (!targetId && link.href.includes('onenote:')) {
+                const parts = link.href.split('#');
+                if (parts.length > 1) {
+                    try {
+                        const hierarchy = decodeURIComponent(parts[0].replace('onenote:', '').replace(/\\/g, '/')).replace(/\.one$/, '');
+                        const fragment = decodeURIComponent(parts[1]);
+
+                        let fullTargetPath;
+                        if (fragment.startsWith('section-id=')) {
+                            // Link to a section/folder
+                            fullTargetPath = hierarchy.toLowerCase();
+                        } else {
+                            // Link to a page
+                            const pageName = fragment.split('&')[0];
+                            fullTargetPath = hierarchy ? `${hierarchy}/${pageName}`.toLowerCase() : pageName.toLowerCase();
+                        }
+
+                        targetId = Object.keys(pageIdMap).find(id => {
+                            const info = pageIdMap[id];
+                            const relToVault = path.relative(outputBase, info.path).replace(/\.md$/, '').toLowerCase();
+                            // Match either the full path or just the end (if sections are deeply nested)
+                            return relToVault === fullTargetPath || relToVault.endsWith('/' + fullTargetPath);
+                        });
+                    } catch (e) {
+                        // Ignore parsing errors
+                    }
+                }
+            }
+
+
 
             if (targetId && targetId !== pageId) {
                 const targetInfo = pageIdMap[targetId];
