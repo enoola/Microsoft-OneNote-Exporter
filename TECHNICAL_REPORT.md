@@ -23,12 +23,18 @@ The tool is built on **Node.js** and relies on three core pillars:
 - During link resolution, if an exact match fails, we normalize the map keys by stripping braces `{}` and suffixes.
 - If the normalized ID is found within the link's `href`, we consider it a match.
 
-### 2. Attachment Downloads (SharePoint Redirection)
-**Challenge**: "Downloading" a PDF in OneNote Web often just opens a SharePoint viewer in a new tab, rather than downloading the file.
-**Solution**: A multi-strategy download manager (`downloadAttachment` in `exporter.js`).
-1.  **Event Racing**: We trigger the click and race a `page.waitForEvent('download')` against a `page.waitForEvent('popup')`.
-2.  **Redirection Handling**: If a popup opens (SharePoint viewer), we intercept the URL, append `?download=1`, and force a raw fetch of the stream.
-3.  **DOM Tagging**: To ensure we click the *exact* right icon, we tag elements for extraction with unique IDs (`data-one-attach-id`) in the scraper context before trying to interact with them.
+### 2. Attachment Downloads (Multi-Strategy approach)
+**Challenge**: "Downloading" a PDF in OneNote Web often just opens a SharePoint viewer in a new tab, or requires complex user interactions like double-clicking and confirming a security warning.
+**Solution**: A robust multi-strategy download manager implemented in `src/downloadStrategies.js`.
+1.  **Strategy 1: Direct Download (URL Magic)**:
+    - We intercept SharePoint/OneDrive URLs and automatically append `?download=1`.
+    - We attempt a server-to-server stream fetch, bypassing the browser UI entirely for speed and reliability.
+2.  **Strategy 2: Physical UI Click (with Modal Handling)**:
+    - If direct download fails (or for local/printout files), we simulate a physical **double-click** in the browser.
+    - We have built-in "Modal Intelligence": the script detects the OneNote "Download File" security prompt and automatically clicks the "Download" button to proceed.
+3.  **Strategy 3: Event Racing**:
+    - We race Playwright's `download` event against a `popup` event. If a new tab opens (e.g., a PDF viewer), we repeat the "Direct Download" logic on that new tab.
+4.  **DOM Tagging**: To ensure interaction with the correct element, `scrapers.js` tags potential assets with unique IDs (`data-one-attach-id`) before the extraction loop begins.
 
 ### 3. Password Protected Sections
 **Challenge**: The scraper would hang or crash when encountering a locked section.
@@ -41,6 +47,12 @@ The tool is built on **Node.js** and relies on three core pillars:
 **Solution**: A two-stage Regex cleaner in `scrapers.js`:
 1.  Strip the accessibility suffix (everything matching `, Page.*Select.*`).
 2.  Strip the pagination suffix (`Page \d+ of \d+`).
+
+### 5. Unified Wikilink Generation
+**Challenge**: Different attachment types (Standard `<a>` links vs. `div` printouts) were being linked inconsistently, often losing their extensions or failing on filenames with special characters (parentheses, spaces).
+**Solution**: A "Contract of Trust" between the `Exporter` and `Parser`.
+- **The Exporter**: Determines the final unique filename on disk, then injects this **full filename** back into the HTML using `data-local-file` and `data-filename` attributes. It uses a robust escaped-ID regex to handle characters that would otherwise break JavaScript string replacements.
+- **The Parser**: Has a "Smart Extension" rule. It trusts the `data-local-file` attribute if it already contains a dot (indicating a full filename), ensuring perfect Obsidian-style Wikilinks like `[[assets/filename.xlsx.pdf]]` are generated regardless of the source element type.
 
 ## Task History
 
