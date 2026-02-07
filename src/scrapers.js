@@ -302,6 +302,8 @@ async function getPageContent(frame) {
         const isFileLink = (link) => {
             const href = link.getAttribute('href') || '';
             const text = link.innerText.trim();
+            const title = link.getAttribute('title') || '';
+            const ariaLabel = link.getAttribute('aria-label') || '';
             const className = (link.className || '').toLowerCase();
             const parentClass = (link.parentElement?.className || '').toLowerCase();
 
@@ -313,44 +315,91 @@ async function getPageContent(frame) {
             const isCloud = (className.includes('hyperlinkv2') || className.includes('cloudfile') || className.includes('onedrive') || parentClass.includes('cloudfile')) &&
                 (href.includes('sharepoint.com') || href.includes('1drv.ms') || href.includes('onedrive.live.com'));
 
+            // Extension check helper (cases like "file.pdf" or "file.pdf.xlsx")
+            const fileExtRegex = /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)(\?|$)/i;
+
+            // Check if it's a known attachment or looks like a file resource
             const isLocal = className.includes('attachment') ||
                 parentClass.includes('attachment') ||
                 link.querySelector('img[src*="box43.png"]') || // OneNote icon for attachments
                 className.includes('fileicon') ||
-                /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)$/i.test(text.split('\n')[0].trim()) ||
-                (/\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)$/i.test(href));
+                fileExtRegex.test(title) ||
+                fileExtRegex.test(ariaLabel) ||
+                // Check text separately with truncation awareness: 
+                // Don't just check at the end ($), because OneNote might append "..."
+                fileExtRegex.test(text.split('\n')[0].trim()) ||
+                fileExtRegex.test(href);
 
             return { isFile: isCloud || isLocal, isCloud };
         };
 
         // 3. Process File Attachments and Internal Links
-        const allLinks = Array.from(contentDiv.querySelectorAll('a'));
-        const realLinks = Array.from(canvas.querySelectorAll('a'));
+        const allPotentialLinks = Array.from(contentDiv.querySelectorAll('a, div[title], span[title], button[title]'));
+        const realPotentialLinks = Array.from(canvas.querySelectorAll('a, div[title], span[title], button[title]'));
 
-        allLinks.forEach((link, idx) => {
+        const processedFileSignatures = new Set();
+
+        allPotentialLinks.forEach((link, idx) => {
             const href = link.getAttribute('href') || '';
             const text = link.innerText.trim();
+            const title = link.getAttribute('title') || '';
 
             const { isFile, isCloud } = isFileLink(link);
 
             if (isFile) {
+                // Deduplicate by href (if present) or by title+text
+                const signature = href || (`${title}_${text}`);
+                if (processedFileSignatures.has(signature)) return;
+                processedFileSignatures.add(signature);
+
                 const attachId = `file_${attachmentInfos.length}`;
-                let originalName = text.split('\n')[0].trim() || 'attached_file';
-                if (originalName === 'attached_file' || originalName === '') {
-                    const match = href.match(/([^\/]+\.[a-zA-Z0-9]+)$/);
-                    if (match) originalName = match[1];
+
+                // Prioritize full names from attributes (OneNote Web often truncates link text)
+                const ariaLabel = link.getAttribute('aria-label') || '';
+                const fileExtRegex = /\.[a-zA-Z0-9]{2,5}(\?|$)/;
+
+                let originalName = '';
+                if (fileExtRegex.test(title)) originalName = title;
+                else if (fileExtRegex.test(ariaLabel)) originalName = ariaLabel;
+                else originalName = text.split('\n')[0].trim();
+
+                if (!originalName || originalName === 'attached_file' || !fileExtRegex.test(originalName)) {
+                    if (href) {
+                        try {
+                            const urlObj = new URL(href, 'https://example.com');
+                            const fileParam = urlObj.searchParams.get('file');
+                            if (fileParam && fileExtRegex.test(fileParam)) {
+                                originalName = fileParam;
+                            } else {
+                                const match = urlObj.pathname.match(/([^\/]+\.[a-zA-Z0-9]+)$/);
+                                if (match) originalName = match[1];
+                            }
+                        } catch (e) {
+                            // Fallback regex
+                            const match = href.match(/([^\/]+\.[a-zA-Z0-9]+)(?:\?|$)/);
+                            if (match) originalName = match[1];
+                        }
+                    }
                 }
+                if (!originalName) originalName = 'attached_file';
 
                 attachmentInfos.push({ id: attachId, src: href, originalName: originalName, isCloud: isCloud });
                 link.setAttribute('data-local-file', attachId);
                 link.setAttribute('data-filename', originalName);
 
                 // Tag the REAL element for clicking
-                // Match by exact href first, then fuzzy
-                let realLink = realLinks.find(rl => rl.getAttribute('href') === href);
-                if (!realLink && text) {
-                    realLink = realLinks.find(rl => rl.innerText.trim() === text);
+                // Match by exact href first, then title, then fuzzy text
+                let realLink = null;
+                if (href) {
+                    realLink = realPotentialLinks.find(rl => rl.getAttribute('href') === href);
                 }
+                if (!realLink && title) {
+                    realLink = realPotentialLinks.find(rl => rl.getAttribute('title') === title);
+                }
+                if (!realLink && text) {
+                    realLink = realPotentialLinks.find(rl => rl.innerText.trim() === text);
+                }
+
                 if (realLink) {
                     realLink.setAttribute('data-one-attach-id', attachId);
                 }

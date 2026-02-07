@@ -48,21 +48,47 @@ async function tryUIClick(contentFrame, attachId, outputPath) {
         return false;
     }
 
-    console.log(chalk.cyan(`      [Strategy: UI Click] Triggering click and waiting for download event...`));
+    console.log(chalk.cyan(`      [Strategy: UI Click] Triggering double click and waiting for download event...`));
     try {
         await link.scrollIntoViewIfNeeded();
 
         // Listen for BOTH download and popup
-        const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
-        const popupPromise = page.waitForEvent('popup', { timeout: 15000 });
+        const downloadPromise = page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
+        const popupPromise = page.waitForEvent('popup', { timeout: 15000 }).catch(() => null);
 
-        await link.click({ force: true });
+        // Perform double click (some OneNote elements need it)
+        await link.dblclick({ force: true, delay: 200 });
+
+        // Check for "Download" confirmation dialog (DOM-based)
+        // OneNote often shows a "Download File" modal with a "Download" button
+        try {
+            // Check broadly for a Download button in the page or frame
+            // Using a short timeout because it should appear quickly if relevant
+            const downloadBtnSelector = 'button[name="Download"], button[aria-label="Download"], button:text-is("Download"), button:has-text("Download")';
+
+            // We search in both page and frame context
+            const btnOnPage = page.locator(downloadBtnSelector).filter({ hasText: /^Download$/i }).first();
+            const btnOnFrame = contentFrame.locator(downloadBtnSelector).filter({ hasText: /^Download$/i }).first();
+
+            // Wait a moment for UI reaction
+            await page.waitForTimeout(1000);
+
+            if (await btnOnPage.isVisible()) {
+                console.log(chalk.cyan(`      [Strategy: UI Click] Found confirmation dialog on page, clicking Download...`));
+                await btnOnPage.click();
+            } else if (await btnOnFrame.isVisible()) {
+                console.log(chalk.cyan(`      [Strategy: UI Click] Found confirmation dialog in frame, clicking Download...`));
+                await btnOnFrame.click();
+            }
+        } catch (e) {
+            // Ignore if no dialog found, might go straight to download
+        }
 
         // Race the events
         const result = await Promise.race([
-            downloadPromise.then(d => ({ type: 'download', value: d })),
-            popupPromise.then(p => ({ type: 'popup', value: p })),
-            new Promise(r => setTimeout(() => r({ type: 'timeout' }), 8000))
+            downloadPromise.then(d => d ? { type: 'download', value: d } : { type: 'timeout' }),
+            popupPromise.then(p => p ? { type: 'popup', value: p } : { type: 'timeout' }),
+            new Promise(r => setTimeout(() => r({ type: 'timeout' }), 10000))
         ]);
 
         if (result.type === 'download') {
@@ -129,14 +155,16 @@ async function downloadAttachment(contentFrame, info, outputPath) {
         }
 
         // 3. Last fallback: direct request on the original URL
-        console.log(chalk.cyan(`      [Strategy: Fallback] Attempting direct request...`));
-        const response = await context.request.get(info.src);
-        if (response.ok()) {
-            const contentType = response.headers()['content-type'] || '';
-            if (!contentType.includes('text/html')) {
-                await fs.writeFile(outputPath, await response.body());
-                console.log(chalk.green(`      [Success] Downloaded via Strategy: Fallback`));
-                return true;
+        if (info.src) {
+            console.log(chalk.cyan(`      [Strategy: Fallback] Attempting direct request...`));
+            const response = await context.request.get(info.src);
+            if (response.ok()) {
+                const contentType = response.headers()['content-type'] || '';
+                if (!contentType.includes('text/html')) {
+                    await fs.writeFile(outputPath, await response.body());
+                    console.log(chalk.green(`      [Success] Downloaded via Strategy: Fallback`));
+                    return true;
+                }
             }
         }
 
