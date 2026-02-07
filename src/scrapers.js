@@ -45,9 +45,9 @@ async function getSections(frame, parentId = null) {
                 } else {
                     // Final fallback: look specifically for a container that looks like it belongs to us
                     const groupContainer = parentNode.closest('[class*="sectionGroupContainer"]');
-                    if (groupContainer) {
-                        // Avoid broad querySelector if possible, but keep as last resort
-                        searchContainer = groupContainer.querySelector('[role="group"]') || [];
+                    const foundGroup = groupContainer ? groupContainer.querySelector('[role="group"]') : null;
+                    if (foundGroup) {
+                        searchContainer = foundGroup;
                     } else {
                         return [];
                     }
@@ -299,28 +299,72 @@ async function getPageContent(frame) {
             }
         });
 
-        // 3. Extract File Attachments and Internal Links
-        const allLinks = Array.from(contentDiv.querySelectorAll('a'));
-        allLinks.forEach((link, idx) => {
-            let href = link.getAttribute('href') || '';
+        const isFileLink = (link) => {
+            const href = link.getAttribute('href') || '';
             const text = link.innerText.trim();
-            const className = link.className || '';
+            const className = (link.className || '').toLowerCase();
+            const parentClass = (link.parentElement?.className || '').toLowerCase();
+
+            // Explicitly skip internal navigation protocols
+            if (href.startsWith('onenote:') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) {
+                return { isFile: false, isCloud: false };
+            }
+
+            const isCloud = (className.includes('hyperlinkv2') || className.includes('cloudfile') || className.includes('onedrive') || parentClass.includes('cloudfile')) &&
+                (href.includes('sharepoint.com') || href.includes('1drv.ms') || href.includes('onedrive.live.com'));
+
+            const isLocal = className.includes('attachment') ||
+                parentClass.includes('attachment') ||
+                link.querySelector('img[src*="box43.png"]') || // OneNote icon for attachments
+                className.includes('fileicon') ||
+                /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)$/i.test(text.split('\n')[0].trim()) ||
+                (/\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)$/i.test(href));
+
+            return { isFile: isCloud || isLocal, isCloud };
+        };
+
+        // 3. Process File Attachments and Internal Links
+        const allLinks = Array.from(contentDiv.querySelectorAll('a'));
+        const realLinks = Array.from(canvas.querySelectorAll('a'));
+
+        allLinks.forEach((link, idx) => {
+            const href = link.getAttribute('href') || '';
+            const text = link.innerText.trim();
+
+            const { isFile, isCloud } = isFileLink(link);
+
+            if (isFile) {
+                const attachId = `file_${attachmentInfos.length}`;
+                let originalName = text.split('\n')[0].trim() || 'attached_file';
+                if (originalName === 'attached_file' || originalName === '') {
+                    const match = href.match(/([^\/]+\.[a-zA-Z0-9]+)$/);
+                    if (match) originalName = match[1];
+                }
+
+                attachmentInfos.push({ id: attachId, src: href, originalName: originalName, isCloud: isCloud });
+                link.setAttribute('data-local-file', attachId);
+                link.setAttribute('data-filename', originalName);
+
+                // Tag the REAL element for clicking
+                // Match by exact href first, then fuzzy
+                let realLink = realLinks.find(rl => rl.getAttribute('href') === href);
+                if (!realLink && text) {
+                    realLink = realLinks.find(rl => rl.innerText.trim() === text);
+                }
+                if (realLink) {
+                    realLink.setAttribute('data-one-attach-id', attachId);
+                }
+                return;
+            }
 
             // Detect Internal OneNote Links
-            // OneNote uses various formats for internal links:
-            // 1. onenote:https://... or onenote:/// protocol
-            // 2. view.aspx?page-id=... or section-id=...
-            // 3. Links starting with # (anchor/fragment-only)
-            // 4. Links with no href or empty href (most common for internal links!)
-            // 5. Links without http protocol (relative links)
-            // 6. Full URLs to OneNote/SharePoint domains
             const isOneNoteUrl = href.includes('onenote.') ||
                 href.includes('.officeapps.live.com') ||
                 href.includes('.sharepoint.com') ||
                 href.includes('view.aspx');
 
-            const isInternal = !href ||  // No href attribute or empty href
-                href === '#' ||  // Just an anchor
+            const isInternal = !href ||
+                href === '#' ||
                 href.includes('onenote:') ||
                 isOneNoteUrl ||
                 (!href.startsWith('http') && !href.startsWith('//') && !href.startsWith('mailto:') && !href.startsWith('file:') && !href.startsWith('data:'));
@@ -329,53 +373,10 @@ async function getPageContent(frame) {
                 const linkId = `link_${internalLinks.length}`;
                 internalLinks.push({ id: linkId, href, text });
                 link.setAttribute('data-internal-link', linkId);
-                return;
-            }
-
-            // Detect File Attachments (Cloud or Local UI)
-            // Local attachments often have classes like "attachmentListItem" or "fileIcon"
-            const isCloudFile = className.includes('HyperlinkV2') &&
-                (href.includes('sharepoint.com') || href.includes('1drv.ms') || href.includes('onedrive.live.com'));
-
-            const isLocalFile = className.includes('attachment') ||
-                link.querySelector('img[src*="box43.png"]') || // OneNote icon for attachments
-                className.includes('fileIcon') ||
-                // Fallback: Check for common file extensions in the link text or href if it looks like a file
-                /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log)$/i.test(text) ||
-                (/\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log)$/i.test(href) && !href.includes('onenote:'));
-
-            if (isCloudFile || isLocalFile) {
-                const attachId = `file_${attachmentInfos.length}`;
-                // Try to infer name from text or href if text is empty
-                let originalName = text || 'attached_file';
-                if (originalName === 'attached_file' || originalName === '') {
-                    const match = href.match(/([^\/]+\.[a-zA-Z0-9]+)$/);
-                    if (match) originalName = match[1];
-                }
-
-                attachmentInfos.push({ id: attachId, src: href, originalName: originalName });
-                link.setAttribute('data-local-file', attachId);
-                link.setAttribute('data-filename', originalName);
-
-                // IMPORTANT: Find the original link in the actual DOM to tag it for clicking
-                // This is tricky because we are inside an evaluate function and link is a clone child.
-                // We'll use a more direct approach by tagging the real elements in the canvas first.
             }
         });
 
-        // RE-TAGGING REAL ELEMENTS: Since we need to click the ACTUAL elements later, 
-        // we'll search the real canvas for the same links and tag them.
-        attachmentInfos.forEach(info => {
-            const realLinks = Array.from(canvas.querySelectorAll('a'));
-            // Fuzzy match: exact href is best, but sometimes text differs slightly. 
-            // We prioritize exact href match.
-            const matchingLink = realLinks.find(l => l.getAttribute('href') === info.src); // Relaxed check
-            if (matchingLink) {
-                matchingLink.setAttribute('data-one-attach-id', info.id);
-            }
-        });
-
-        // 4. Extract image info
+        // 4. Extract image info (including Printouts)
         const imageInfos = [];
         outlines.forEach(outline => {
             const originalImgs = Array.from(outline.querySelectorAll('img'));
@@ -388,6 +389,12 @@ async function getPageContent(frame) {
 
                     const srcLower = src.toLowerCase();
                     const className = (origImg.className || '').toLowerCase();
+                    const parentClass = (origImg.parentElement?.className || '').toLowerCase();
+
+                    // Detect Printouts
+                    const isPrintout = parentClass.includes('printout') ||
+                        className.includes('printout') ||
+                        origImg.closest('[class*="Printout"]');
 
                     // UI patterns to exclude
                     const isMicrosoftUI = (srcLower.includes('static.microsoft') || srcLower.includes('officeonline')) &&
@@ -397,6 +404,9 @@ async function getPageContent(frame) {
                         srcLower.includes('box42.png') ||
                         srcLower.includes('box43.png');
 
+                    const width = origImg.offsetWidth || origImg.naturalWidth || 0;
+                    const height = origImg.offsetHeight || origImg.naturalHeight || 0;
+
                     const hasUIClass = className.includes('handle') ||
                         className.includes('resize') ||
                         className.includes('insertionhint') ||
@@ -405,31 +415,21 @@ async function getPageContent(frame) {
                     const isOneNoteImage = srcLower.includes('getimage.ashx');
                     const isWACImage = className.includes('wacimage');
 
-                    const width = origImg.offsetWidth || origImg.naturalWidth || 0;
-                    const height = origImg.offsetHeight || origImg.naturalHeight || 0;
-
-                    // Filter out small MS icons (likely tags/handles) even if they look like GetImage.ashx
-                    const isSmallMSIcon = isMicrosoftUI && width > 0 && width < 30 && height > 0 && height < 30;
-
-                    // Logic: 
-                    // 1. If it's a known OneNote content image (GetImage.ashx or WACImage), keep it regardless of size
-                    // 2. Otherwise, exclude obvious Microsoft UI/icons
-                    // 3. Keep if it has some size OR has no UI-specific class and looks like content
-                    const isRealImage = (isOneNoteImage || isWACImage || (
-                        !isMicrosoftUI &&
-                        !isGenericIcon &&
-                        !hasUIClass &&
-                        (width > 5 || height > 5 || (width === 0 && !className))
-                    )) && !isSmallMSIcon;
+                    const isRealImage = isPrintout || (isOneNoteImage || isWACImage || (
+                        !isMicrosoftUI && !isGenericIcon && !hasUIClass &&
+                        (width > 10 || height > 10 || (width === 0 && !className))
+                    ));
 
                     if (isRealImage) {
                         const id = `img_${imageInfos.length}`;
-                        imageInfos.push({ id, src });
+                        imageInfos.push({ id, src, isPrintout });
 
                         const clonedImgs = Array.from(contentDiv.querySelectorAll('img'));
                         const matchingClone = clonedImgs.find(c => c.getAttribute('src') === origImg.getAttribute('src') && !c.hasAttribute('data-local-src'));
                         if (matchingClone) {
                             matchingClone.setAttribute('data-local-src', id);
+                            if (isPrintout) matchingClone.setAttribute('data-is-printout', 'true');
+
                             let alt = matchingClone.getAttribute('alt') || '';
                             if (alt.includes('\n') || alt.includes('ACCESSIBILITY') || alt.length > 300) {
                                 const firstLine = alt.split('\n')[0].trim();

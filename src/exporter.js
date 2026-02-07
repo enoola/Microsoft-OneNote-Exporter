@@ -12,90 +12,7 @@ const sanitize = require('sanitize-filename');
 
 
 
-// Specialized download for attachments that might need clicking (SharePoint/OneDrive) with retry
-async function downloadAttachment(contentFrame, info, outputPath) {
-    return withRetry(async () => {
-        const page = contentFrame.page();
-        const context = page.context();
-        let url = info.src;
-
-        // 1. Try URL transformation for SharePoint/OneDrive/1drv.ms
-        // These often have a "viewer" page, but adding download=1 forces the file stream.
-        if (url.includes('sharepoint.com') || url.includes('onedrive.live.com') || url.includes('1drv.ms')) {
-            const separator = url.includes('?') ? '&' : '?';
-            const downloadUrl = url + separator + 'download=1';
-
-            try {
-                const response = await context.request.get(downloadUrl);
-                const contentType = response.headers()['content-type'] || '';
-
-                // Allow almost any content type for attachments, but exclude HTML (pages/errors)
-                if (response.ok() && !contentType.includes('text/html')) {
-                    await fs.writeFile(outputPath, await response.body());
-                    return true;
-                }
-            } catch (e) {
-                // Ignore transformation error, fall back to clicking
-            }
-        }
-
-        // 2. Try physical download by clicking
-        const selector = `a[data-one-attach-id="${info.id}"]`;
-        await contentFrame.waitForSelector(selector, { state: 'attached', timeout: 5000 }).catch(() => null);
-        const linkExists = await contentFrame.$(selector);
-
-        if (linkExists) {
-            // Listen for BOTH download and popup (if it opens in a new tab)
-            const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
-            const popupPromise = page.waitForEvent('popup', { timeout: 15000 });
-
-            const clickPromise = linkExists.click({ force: true });
-
-            // Race the events
-            const result = await Promise.race([
-                downloadPromise.then(d => ({ type: 'download', value: d })),
-                popupPromise.then(p => ({ type: 'popup', value: p })),
-                clickPromise.then(() => new Promise(r => setTimeout(() => r({ type: 'timeout' }), 5000)))
-            ]);
-
-            if (result.type === 'download') {
-                await result.value.saveAs(outputPath);
-                return true;
-            } else if (result.type === 'popup') {
-                const popup = result.value;
-                const popupUrl = popup.url();
-                // If the popup opened a viewer, try forcing download there
-                if (popupUrl.includes('sharepoint.com') || popupUrl.includes('onedrive.live.com')) {
-                    const separator = popupUrl.includes('?') ? '&' : '?';
-                    await popup.goto(popupUrl + separator + 'download=1').catch(() => null);
-                    // The goto might trigger a download
-                    try {
-                        const d = await page.waitForEvent('download', { timeout: 10000 });
-                        await d.saveAs(outputPath);
-                        await popup.close();
-                        return true;
-                    } catch (e) { }
-                }
-                await popup.close();
-            }
-        }
-
-        // Fallback: Use direct GET request on the original URL (last resort)
-        const fallbackResult = await downloadResource(contentFrame.page(), info.src, outputPath);
-        if (!fallbackResult) {
-            throw new Error(`All download strategies failed for ${info.originalName}`);
-        }
-        return fallbackResult;
-    }, {
-        maxAttempts: 3,
-        initialDelayMs: 1000,
-        operationName: `Download attachment ${info.originalName}`,
-        silent: true
-    }).catch((e) => {
-        console.error(`      Error in downloadAttachment for ${info.originalName}: ${e.message}`);
-        return false;
-    });
-}
+const { downloadAttachment } = require('./downloadStrategies');
 
 // Rename and generalize to downloadResource with retry logic
 async function downloadResource(page, url, outputPath) {
@@ -278,34 +195,66 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                 if (totalAssets > 0) {
                     await fs.ensureDir(assetDir);
 
-                    // 1. Process Images
+                    // Helper to get unique filename in assets dir
+                    const getUniqueAssetPath = (base, ext) => {
+                        let name = sanitize(base);
+                        let fullPath = path.join(assetDir, `${name}.${ext}`);
+                        let counter = 1;
+                        while (fs.existsSync(fullPath)) {
+                            fullPath = path.join(assetDir, `${name}_${counter++}.${ext}`);
+                        }
+                        return fullPath;
+                    };
+
+                    // 1. Process Images (including Printouts)
                     for (const imgInfo of content.images || []) {
-                        const finalBaseName = totalAssets > 1 ? `${sanitizedNoteName}_${assetCounter++}` : sanitizedNoteName;
-                        updatedHtml = updatedHtml.replace(new RegExp(`data-local-src="${imgInfo.id}"`, 'g'), `data-local-src="${finalBaseName}"`);
+                        // For printouts, we might eventually want better names, but for now:
+                        const finalBaseName = `${sanitizedNoteName}_img_${assetCounter++}`;
                         const imgPath = path.join(assetDir, `${finalBaseName}.png`);
+
+                        updatedHtml = updatedHtml.replace(new RegExp(`data-local-src="${imgInfo.id}"`, 'g'), `data-local-src="${finalBaseName}"`);
+
                         const success = await downloadResource(contentFrame.page(), imgInfo.src, imgPath);
-                        if (success) savedResources++;
+                        if (success) {
+                            savedResources++;
+                            console.log(chalk.gray(`      [Asset] Saved IMAGE to: ${path.relative(process.cwd(), imgPath)}`));
+                        }
                     }
 
                     // 2. Process Attachments
                     for (const attachInfo of content.attachments || []) {
-                        const finalBaseName = totalAssets > 1 ? `${sanitizedNoteName}_${assetCounter++}` : sanitizedNoteName;
-                        updatedHtml = updatedHtml.replace(new RegExp(`data-local-file="${attachInfo.id}"`, 'g'), `data-local-file="${finalBaseName}"`);
-                        const ext = attachInfo.originalName.includes('.') ? attachInfo.originalName.split('.').pop() : 'bin';
-                        const filePath = path.join(assetDir, `${finalBaseName}.${ext}`);
+                        let originalName = attachInfo.originalName || 'file';
+                        let baseName = originalName.includes('.') ? originalName.substring(0, originalName.lastIndexOf('.')) : originalName;
+                        let ext = originalName.includes('.') ? originalName.split('.').pop() : 'bin';
+
+                        const filePath = getUniqueAssetPath(baseName, ext);
+                        const finalFileName = path.basename(filePath);
+                        const finalBaseNameWithoutExt = finalFileName.substring(0, finalFileName.lastIndexOf('.'));
+
+                        // Tag it so Turndown knows the final filename
+                        updatedHtml = updatedHtml.replace(new RegExp(`data-local-file="${attachInfo.id}"`, 'g'), `data-local-file="${finalBaseNameWithoutExt}" data-filename="${finalFileName}"`);
+
                         const success = await downloadAttachment(contentFrame, attachInfo, filePath);
-                        if (success) savedResources++;
+                        if (success) {
+                            savedResources++;
+                            console.log(chalk.gray(`      [Asset] Saved ATTACHMENT to: ${path.relative(process.cwd(), filePath)}`));
+                        }
                     }
 
                     // 3. Process Videos
                     for (const videoInfo of content.videos || []) {
-                        const finalBaseName = totalAssets > 1 ? `${sanitizedNoteName}_${assetCounter++}` : sanitizedNoteName;
-                        updatedHtml = updatedHtml.replace(new RegExp(`data-local-video="${videoInfo.id}"`, 'g'), `data-local-video="${finalBaseName}"`);
-                        // Use .mp4 as default if unknown
                         const ext = videoInfo.src.split('.').pop().split('?')[0] || 'mp4';
-                        const filePath = path.join(assetDir, `${finalBaseName}.${ext.length < 5 ? ext : 'mp4'}`);
+                        const finalExt = ext.length < 5 ? ext : 'mp4';
+                        const finalBaseName = `${sanitizedNoteName}_video_${assetCounter++}`;
+                        const filePath = path.join(assetDir, `${finalBaseName}.${finalExt}`);
+
+                        updatedHtml = updatedHtml.replace(new RegExp(`data-local-video="${videoInfo.id}"`, 'g'), `data-local-video="${finalBaseName}"`);
+
                         const success = await downloadResource(contentFrame.page(), videoInfo.src, filePath);
-                        if (success) savedResources++;
+                        if (success) {
+                            savedResources++;
+                            console.log(chalk.gray(`      [Asset] Saved VIDEO to: ${path.relative(process.cwd(), filePath)}`));
+                        }
                     }
                 }
 
