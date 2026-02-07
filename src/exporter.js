@@ -10,8 +10,6 @@ const fs = require('fs-extra');
 const path = require('path');
 const sanitize = require('sanitize-filename');
 
-
-
 const { downloadAttachment } = require('./downloadStrategies');
 
 // Rename and generalize to downloadResource with retry logic
@@ -229,10 +227,16 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
 
                         const filePath = getUniqueAssetPath(baseName, ext);
                         const finalFileName = path.basename(filePath);
-                        const finalBaseNameWithoutExt = finalFileName.substring(0, finalFileName.lastIndexOf('.'));
 
                         // Tag it so Turndown knows the final filename
-                        updatedHtml = updatedHtml.replace(new RegExp(`data-local-file="${attachInfo.id}"`, 'g'), `data-local-file="${finalBaseNameWithoutExt}" data-filename="${finalFileName}"`);
+                        // We replace the ID with the actual FULL filename for the 'data-local-file' attribute
+                        // This ensures parser.js can trust it directly if it contains a dot.
+                        // We also capture and replace any existing data-filename attribute.
+                        const escapedId = attachInfo.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        updatedHtml = updatedHtml.replace(
+                            new RegExp(`data-local-file="${escapedId}"( data-filename="[^"]*")?`, 'g'),
+                            `data-local-file="${finalFileName}" data-filename="${finalFileName}"`
+                        );
 
                         const success = await downloadAttachment(contentFrame, attachInfo, filePath);
                         if (success) {
@@ -243,10 +247,23 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
 
                     // 3. Process Videos
                     for (const videoInfo of content.videos || []) {
-                        const ext = videoInfo.src.split('.').pop().split('?')[0] || 'mp4';
-                        const finalExt = ext.length < 5 ? ext : 'mp4';
+                        // Better extension detection for videos
+                        let ext = 'mp4';
+                        if (videoInfo.src) {
+                            try {
+                                const urlObj = new URL(videoInfo.src);
+                                const pathname = urlObj.pathname;
+                                const potentialExt = pathname.split('.').pop();
+                                if (potentialExt && potentialExt.length < 5 && /^[a-z0-9]+$/i.test(potentialExt)) {
+                                    ext = potentialExt;
+                                }
+                            } catch (e) {
+                                // Fallback
+                            }
+                        }
+
                         const finalBaseName = `${sanitizedNoteName}_video_${assetCounter++}`;
-                        const filePath = path.join(assetDir, `${finalBaseName}.${finalExt}`);
+                        const filePath = path.join(assetDir, `${finalBaseName}.${ext}`);
 
                         updatedHtml = updatedHtml.replace(new RegExp(`data-local-video="${videoInfo.id}"`, 'g'), `data-local-video="${finalBaseName}"`);
 

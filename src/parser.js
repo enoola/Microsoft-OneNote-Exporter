@@ -23,10 +23,14 @@ function createMarkdownConverter() {
 
     // Rule for local file attachments (Obsidian style)
     td.addRule('localFiles', {
-        filter: (node) => node.nodeName === 'A' && node.getAttribute('data-local-file'),
+        filter: (node) => node.getAttribute('data-local-file'),
         replacement: (content, node) => {
             const localName = node.getAttribute('data-local-file');
-            // Prefer the explicitly passed filename from scraper, falling back to text
+            // If localName already has a dot, use it directly (it's the full final name)
+            if (localName.includes('.')) {
+                return `[[assets/${localName}]]`;
+            }
+            // Otherwise try to append extension from filename attribute
             const originalName = node.getAttribute('data-filename') || node.innerText.trim() || 'file';
             const ext = originalName.includes('.') ? originalName.split('.').pop() : 'bin';
             return `[[assets/${localName}.${ext}]]`;

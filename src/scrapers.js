@@ -320,7 +320,9 @@ async function getPageContent(frame) {
 
             // Check if it's a known attachment or looks like a file resource
             const isLocal = className.includes('attachment') ||
+                className.includes('wacef') || // OneNote Web "File" class
                 parentClass.includes('attachment') ||
+                parentClass.includes('wacef') ||
                 link.querySelector('img[src*="box43.png"]') || // OneNote icon for attachments
                 className.includes('fileicon') ||
                 fileExtRegex.test(title) ||
@@ -356,12 +358,20 @@ async function getPageContent(frame) {
 
                 // Prioritize full names from attributes (OneNote Web often truncates link text)
                 const ariaLabel = link.getAttribute('aria-label') || '';
-                const fileExtRegex = /\.[a-zA-Z0-9]{2,5}(\?|$)/;
+                // Use strict regex to avoid matching truncated text like "...6P4" as an extension
+                const fileExtRegex = /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)(\?|$)/i;
 
                 let originalName = '';
                 if (fileExtRegex.test(title)) originalName = title;
                 else if (fileExtRegex.test(ariaLabel)) originalName = ariaLabel;
                 else originalName = text.split('\n')[0].trim();
+
+                // Detailed logging for debugging
+                console.log(`[Scraper] Analyzing ${link.tagName} (ID: ${attachId}):
+      - title: "${title}"
+      - aria-label: "${ariaLabel}"
+      - text: "${text.substring(0, 30)}..."
+      - initialName: "${originalName}"`);
 
                 if (!originalName || originalName === 'attached_file' || !fileExtRegex.test(originalName)) {
                     if (href) {
@@ -383,6 +393,7 @@ async function getPageContent(frame) {
                 }
                 if (!originalName) originalName = 'attached_file';
 
+                console.log(`[Scraper] Detected attachment: ${originalName} (ID: ${attachId}, Type: ${link.tagName})`);
                 attachmentInfos.push({ id: attachId, src: href, originalName: originalName, isCloud: isCloud });
                 link.setAttribute('data-local-file', attachId);
                 link.setAttribute('data-filename', originalName);
