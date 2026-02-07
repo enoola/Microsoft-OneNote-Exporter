@@ -117,8 +117,15 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
 
         const baseSectionName = sanitize(item.name);
 
-        if (isLocked && options.nopassasked) {
-            console.log(chalk.yellow(`  Section "${item.name}" appears password protected. Skipping as requested.`));
+        const isHeadless = !options.notheadless;
+        if (isLocked && (options.nopassasked || isHeadless)) {
+            if (isHeadless && !options.nopassasked) {
+                console.log(chalk.bold.yellow(`\n[WARNING] Section "${item.name}" is password protected.`));
+                console.log(chalk.yellow(`The browser is running in headless mode, which means you cannot interact with it to unlock the section manually.`));
+                console.log(chalk.yellow(`Acting as if --nopassasked was set: skipping this section.`));
+            } else {
+                console.log(chalk.yellow(`  Section "${item.name}" appears password protected. Skipping as requested.`));
+            }
             const protectedDir = path.join(outputDir, baseSectionName + " [passProtected]");
             await fs.ensureDir(protectedDir);
             processedItems.add(item.id);
@@ -305,7 +312,7 @@ async function runExport(options = {}) {
 
     try {
         console.log(chalk.blue('Fetching notebooks...'));
-        session = await listNotebooks({ ...options, keepOpen: true, notheadless: true });
+        session = await listNotebooks({ ...options, keepOpen: true });
 
         const { notebooks } = session;
 

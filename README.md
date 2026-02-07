@@ -21,8 +21,9 @@ A robust, automated tool to export Microsoft OneNote notebooks into Obsidian-com
   - Handles duplicate page names by appending counters (`Note_1.md`).
 - **Security Handling**:
   - Detects password-protected sections.
-  - Interactive "Pause & Unlock" mode.
-  - Automated skip mode (`--nopassasked`) for hands-free backups.
+  - Interactive "Pause & Unlock" mode (requires `--notheadless`).
+  - Automated skip mode: Sections are automatically skipped when running in **headless mode** (default) to prevent automated runs from getting stuck.
+  - Manual skip mode (`--nopassasked`) for hands-free backups in visible mode.
 - **Automation Ready**: Check/Login/Export commands with CLI flags for fully automated workflows.
 
 ## Installation
@@ -68,6 +69,9 @@ node src/index.js export --notheadless
 # Dump HTML files for debugging
 node src/index.js export --dodump
 ```
+
+> [!NOTE]
+> **Headless Mode vs. Passwords**: By default, the tool runs in "headless" mode (invisible). Since you cannot interact with an invisible browser to unlock sections, the tool will **automatically skip** password-protected sections and act as if `--nopassasked` was set. To unlock sections manually, you **must** use the `--notheadless` flag.
 
 > [!WARNING]
 > The `--dodump` option saves the HTML content of every page and frame encountered to disk. For large notebooks, this can consume a significant amount of disk space and create thousands of files. Use it only for troubleshooting specific issues.
