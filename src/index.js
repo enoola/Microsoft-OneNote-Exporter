@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { program } = require('commander');
-const chalk = require('chalk');
+const logger = require('./utils/logger');
 const { login, checkAuth } = require('./auth');
 const { listNotebooks } = require('./navigator');
 const { runExport } = require('./exporter');
@@ -23,9 +23,9 @@ program
     .action(async () => {
         const isAuth = await checkAuth();
         if (isAuth) {
-            console.log(chalk.green('Authentication file found.'));
+            logger.success('Authentication file found.');
         } else {
-            console.log(chalk.red('Authentication file NOT found. Run "login" first.'));
+            logger.error('Authentication file NOT found. Run "login" first.');
         }
     });
 
@@ -37,17 +37,16 @@ program
     .action(async (options) => {
         try {
             const notebooks = await listNotebooks(options);
-            console.log(chalk.bold('\nAvailable Notebooks:'));
+            logger.step('\nAvailable Notebooks:');
             if (notebooks.length === 0) {
-                console.log(chalk.yellow('No notebooks found or selector failed.'));
-                console.log(chalk.gray('Try running with --notheadless to see what the scraper sees.'));
+                logger.warn('No notebooks found or selector failed.');
+                logger.debug('Try running with --notheadless to see what the scraper sees.');
             }
             notebooks.forEach((nb, index) => {
-                console.log(`${index + 1}. ${chalk.cyan(nb.name)} (${nb.url})`);
+                logger.info(`${index + 1}. ${nb.name} (${nb.url})`);
             });
         } catch (e) {
-            console.error(chalk.red('Failed to list notebooks.'));
-            console.error(e);
+            logger.error('Failed to list notebooks.', e);
         }
     });
 

@@ -1,12 +1,12 @@
 const { chromium } = require('playwright');
 const fs = require('fs-extra');
-const chalk = require('chalk');
+const logger = require('./utils/logger');
 const { AUTH_FILE, ONENOTE_URL } = require('./config');
 
 async function login() {
-    console.log(chalk.blue('Launching browser for authentication...'));
-    console.log(chalk.yellow('Please log in to your Microsoft account in the browser window.'));
-    console.log(chalk.yellow('The script will wait until you successfully reach the notebook list.'));
+    logger.info('Launching browser for authentication...');
+    logger.warn('Please log in to your Microsoft account in the browser window.');
+    logger.warn('The script will wait until you successfully reach the notebook list.');
 
     const browser = await chromium.launch({ headless: false });
     const context = await browser.newContext();
@@ -15,8 +15,8 @@ async function login() {
     try {
         await page.goto(ONENOTE_URL);
 
-        console.log(chalk.yellow('\nLogin flow requires manual interaction.'));
-        console.log(chalk.bold.green('>>> Once you see your Notebooks list in the browser, return here and press ENTER to continue. <<<'));
+        logger.warn('Login flow requires manual interaction.');
+        logger.step('>>> Once you see your Notebooks list in the browser, return here and press ENTER to continue. <<<');
 
         const readline = require('readline');
         const rl = readline.createInterface({
@@ -31,12 +31,12 @@ async function login() {
             });
         });
 
-        console.log(chalk.blue('Saving authentication state...'));
+        logger.info('Saving authentication state...');
 
         await context.storageState({ path: AUTH_FILE });
-        console.log(chalk.green(`Authentication successful! State saved to ${AUTH_FILE}`));
+        logger.success(`Authentication successful! State saved to ${AUTH_FILE}`);
     } catch (error) {
-        console.error(chalk.red('Authentication failed or cancelled:'), error);
+        logger.error('Authentication failed or cancelled:', error);
     } finally {
         await browser.close();
     }

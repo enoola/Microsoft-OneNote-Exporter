@@ -1,5 +1,5 @@
 const { Select } = require('enquirer');
-const chalk = require('chalk');
+const logger = require('./utils/logger');
 const { listNotebooks, openNotebook } = require('./navigator');
 const { getSections, getPages, selectSection, selectPage, getPageContent, navigateBack, isSectionLocked } = require('./scrapers');
 const { createMarkdownConverter } = require('./parser');
@@ -38,7 +38,7 @@ async function downloadResource(page, url, outputPath) {
         operationName: `Download resource`,
         silent: true
     }).catch((e) => {
-        console.error(`      Error downloading resource ${url.substring(0, 100)}...: ${e.message}`);
+        logger.error(`Error downloading resource ${url.substring(0, 100)}...:`, e);
         return false;
     });
 }
@@ -59,9 +59,9 @@ function waitForEnter(message) {
 async function processSections(contentFrame, outputDir, td, options, pageIdMap, processedItems = new Set(), parentId = null, stats = { totalPages: 0, totalAssets: 0 }) {
     const sections = await getSections(contentFrame, parentId);
     if (sections.length === 0 && parentId) {
-        console.log(chalk.gray(`  (No items found in this group)`));
+        logger.debug('(No items found in this group)');
     } else {
-        console.log(chalk.white(`Found ${sections.length} items at current level.`));
+        logger.info(`Found ${sections.length} items at current level.`);
     }
 
     for (const item of sections) {
@@ -77,7 +77,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
             processedItems.add(item.id);
 
             try {
-                console.log(chalk.gray(`  Entering group: ${item.name}`));
+                logger.info(`Entering group: ${item.name}`);
                 await selectSection(contentFrame, item.id);
                 // Extra wait for the tree to expand
                 await contentFrame.waitForTimeout(5000);
@@ -87,11 +87,11 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                     await fs.writeFile(dumpPath, await contentFrame.content());
                 }
                 await processSections(contentFrame, groupDir, td, options, pageIdMap, processedItems, item.id, stats);
-                console.log(chalk.gray(`  Returning from group: ${item.name}`));
+                logger.info(`Returning from group: ${item.name}`);
                 await navigateBack(contentFrame);
                 await contentFrame.waitForTimeout(3000);
             } catch (e) {
-                console.error(chalk.red(`  Failed to process group ${item.name}: ${e.message}`));
+                logger.error(`Failed to process group ${item.name}:`, e);
             }
             continue;
         }
@@ -100,7 +100,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
         try {
             await selectSection(contentFrame, item.id);
         } catch (e) {
-            console.error(chalk.red(`Failed to select section ${item.name}: ${e.message}`));
+            logger.error(`Failed to select section ${item.name}:`, e);
             continue;
         }
 
@@ -120,11 +120,11 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
         const isHeadless = !options.notheadless;
         if (isLocked && (options.nopassasked || isHeadless)) {
             if (isHeadless && !options.nopassasked) {
-                console.log(chalk.bold.yellow(`\n[WARNING] Section "${item.name}" is password protected.`));
-                console.log(chalk.yellow(`The browser is running in headless mode, which means you cannot interact with it to unlock the section manually.`));
-                console.log(chalk.yellow(`Acting as if --nopassasked was set: skipping this section.`));
+                logger.warn(`Section "${item.name}" is password protected.`);
+                logger.warn(`The browser is running in headless mode, which means you cannot interact with it to unlock the section manually.`);
+                logger.warn(`Acting as if --nopassasked was set: skipping this section.`);
             } else {
-                console.log(chalk.yellow(`  Section "${item.name}" appears password protected. Skipping as requested.`));
+                logger.warn(`Section "${item.name}" appears password protected. Skipping as requested.`);
             }
             const protectedDir = path.join(outputDir, baseSectionName + " [passProtected]");
             await fs.ensureDir(protectedDir);
@@ -138,24 +138,24 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
         // Map the Section ID to its directory for internal links
         pageIdMap[item.id] = { path: sectionDir, isDir: true };
 
-        console.log(chalk.bold.magenta(`\n[Section] ${item.name}`));
+        logger.step(`[Section] ${item.name}`);
         processedItems.add(item.id);
 
         while (isLocked) {
-            console.log(chalk.bold.yellow(`\n[WAIT] Section "${item.name}" is password protected.`));
-            console.log(chalk.cyan(`Please switch to the browser window, unlock the section manually, and then return here.`));
-            await waitForEnter(chalk.bold.white('Press ENTER here once the section is unlocked to continue...'));
+            logger.warn(`Section "${item.name}" is password protected.`);
+            logger.info('Please switch to the browser window, unlock the section manually, and then return here.');
+            await waitForEnter('Press ENTER here once the section is unlocked to continue...');
 
             // Re-verify
             await contentFrame.waitForTimeout(2000);
             isLocked = await isSectionLocked(contentFrame);
             if (isLocked) {
-                console.log(chalk.red('Section still appears to be locked. Please try again.'));
+                logger.error('Section still appears to be locked. Please try again.');
             }
         }
 
         const pages = await getPages(contentFrame);
-        console.log(chalk.gray(`  Found ${pages.length} pages. Starting extraction...`));
+        logger.info(`Found ${pages.length} pages. Starting extraction...`);
 
         // Track used filenames in this section to handle collisions
         const usedNames = new Set();
@@ -165,7 +165,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
             if (processedItems.has(pageInfo.id)) continue;
             processedItems.add(pageInfo.id);
 
-            process.stdout.write(chalk.white(`  - Exporting: ${pageInfo.name} ... `));
+            logger.info(`Exporting: ${pageInfo.name} ...`);
 
             try {
                 await selectPage(contentFrame, pageInfo.id);
@@ -222,7 +222,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                         const success = await downloadResource(contentFrame.page(), imgInfo.src, imgPath);
                         if (success) {
                             savedResources++;
-                            console.log(chalk.gray(`      [Asset] Saved IMAGE to: ${path.relative(process.cwd(), imgPath)}`));
+                            logger.debug(`[Asset] Saved IMAGE to: ${path.relative(process.cwd(), imgPath)}`);
                         }
                     }
 
@@ -248,7 +248,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                         const success = await downloadAttachment(contentFrame, attachInfo, filePath);
                         if (success) {
                             savedResources++;
-                            console.log(chalk.gray(`      [Asset] Saved ATTACHMENT to: ${path.relative(process.cwd(), filePath)}`));
+                            logger.debug(`[Asset] Saved ATTACHMENT to: ${path.relative(process.cwd(), filePath)}`);
                         }
                     }
 
@@ -277,7 +277,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                         const success = await downloadResource(contentFrame.page(), videoInfo.src, filePath);
                         if (success) {
                             savedResources++;
-                            console.log(chalk.gray(`      [Asset] Saved VIDEO to: ${path.relative(process.cwd(), filePath)}`));
+                            logger.debug(`[Asset] Saved VIDEO to: ${path.relative(process.cwd(), filePath)}`);
                         }
                     }
                 }
@@ -298,33 +298,33 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                 await fs.writeFile(filePath, finalContent);
                 stats.totalPages++;
                 stats.totalAssets += savedResources;
-                process.stdout.write(chalk.green(`Saved (${savedResources} assets)\n`));
+                logger.success(`Saved (${savedResources} assets)`);
 
             } catch (e) {
-                process.stdout.write(chalk.red(`Failed: ${e.message}\n`));
+                logger.error(`Failed to export ${pageInfo.name}:`, e);
             }
         }
     }
 }
 
 async function runExport(options = {}) {
-    let browser, session;
+    let session;
 
     try {
-        console.log(chalk.blue('Fetching notebooks...'));
+        logger.info('Fetching notebooks...');
         session = await listNotebooks({ ...options, keepOpen: true });
 
         const { notebooks } = session;
 
         if (notebooks.length === 0) {
-            console.log(chalk.yellow('No notebooks found. Exiting.'));
+            logger.warn('No notebooks found. Exiting.');
             return;
         }
 
         let selectedNotebook;
 
         if (options.notebook) {
-            console.log(chalk.blue(`Auto-selecting notebook: "${options.notebook}"...`));
+            logger.info(`Auto-selecting notebook: "${options.notebook}"...`);
             selectedNotebook = notebooks.find(nb => nb.name === options.notebook);
 
             if (!selectedNotebook) {
@@ -342,13 +342,11 @@ async function runExport(options = {}) {
         }
 
         if (selectedNotebook) {
-            console.log(chalk.cyan(`You selected: ${selectedNotebook.name}`));
+            logger.info(`You selected: ${selectedNotebook.name}`);
             await openNotebook(session.page, session.scrapeTarget, selectedNotebook.id);
-            console.log(chalk.green('Successfully entered notebook.'));
+            logger.success('Successfully entered notebook.');
 
-            // Dump info was here, now replacing with Hierarchy Scan
-
-            console.log(chalk.blue('Looking for OneNote content frame...'));
+            logger.info('Looking for OneNote content frame...');
             // Wait for frames to have time to load dynamic content
             await session.page.waitForTimeout(10000);
 
@@ -356,18 +354,15 @@ async function runExport(options = {}) {
             let contentFrame = null;
 
             // Heuristic: Find frame with .sectionList or similar
-            // In the dump, it was frame_1, which is a cross-origin iframe.
             for (const f of frames) {
                 try {
-                    // We check for a known element from our dump analysis
-                    // .sectionList is a good candidate for the navigation pane
                     const hasSections = await f.$('.sectionList');
                     if (hasSections) {
                         contentFrame = f;
-                        console.log(chalk.green(`Found content frame (navigation): ${f.url()}`));
+                        logger.success(`Found content frame (navigation): ${f.url()}`);
 
                         if (options.dodump) {
-                            console.log(chalk.yellow('Dumping content frame HTML to debug_notebook_content.html...'));
+                            logger.warn('Dumping content frame HTML to debug_notebook_content.html...');
                             const frameContent = await f.content();
                             await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
                         }
@@ -379,7 +374,7 @@ async function runExport(options = {}) {
             }
 
             if (!contentFrame) {
-                console.log(chalk.yellow('Could not auto-detect content frame. using main page as fallback...'));
+                logger.warn('Could not auto-detect content frame. using main page as fallback...');
                 contentFrame = session.page;
             }
 
@@ -387,12 +382,12 @@ async function runExport(options = {}) {
             await fs.ensureDir(outputBase);
             const td = createMarkdownConverter();
 
-            console.log(chalk.blue('Scanning sections...'));
+            logger.info('Scanning sections...');
             // Wait for section list specifically
             try {
                 await contentFrame.waitForSelector('.sectionList', { timeout: 10000 });
             } catch (e) {
-                console.log(chalk.yellow('Timeout waiting for .sectionList, trying to scrape anyway...'));
+                logger.warn('Timeout waiting for .sectionList, trying to scrape anyway...');
             }
 
             // Start recursive processing
@@ -400,20 +395,20 @@ async function runExport(options = {}) {
             const stats = { totalPages: 0, totalAssets: 0 };
             await processSections(contentFrame, outputBase, td, options, pageIdMap, new Set(), null, stats);
 
-            console.log(chalk.blue('\nResolving internal links...'));
+            logger.info('Resolving internal links...');
             await resolveInternalLinks(pageIdMap, outputBase);
 
-            console.log(chalk.bold.green('\nExport complete!'));
-            console.log(chalk.white(`Total Pages: ${stats.totalPages}`));
-            console.log(chalk.white(`Total Assets: ${stats.totalAssets}`));
-            console.log(chalk.cyan(`Files saved in: ${outputBase}`));
+            logger.success('Export complete!');
+            logger.info(`Total Pages: ${stats.totalPages}`);
+            logger.info(`Total Assets: ${stats.totalAssets}`);
+            logger.info(`Files saved in: ${outputBase}`);
         }
 
     } catch (e) {
-        console.error(chalk.red('Export failed:'), e);
+        logger.error('Export failed:', e);
     } finally {
         if (session && session.browser) {
-            console.log(chalk.gray('Closing browser...'));
+            logger.debug('Closing browser...');
             await session.browser.close();
         }
     }

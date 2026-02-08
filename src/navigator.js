@@ -1,63 +1,63 @@
 const { chromium } = require('playwright');
-const chalk = require('chalk');
+const logger = require('./utils/logger');
 const { getAuthenticatedContext } = require('./auth');
 const { ONENOTE_URL } = require('./config');
 const fs = require('fs-extra');
 const path = require('path');
 
 async function listNotebooks(options = {}) {
-    console.log(chalk.blue('Connecting to OneNote...'));
+    logger.info('Connecting to OneNote...');
 
     // Default to true (headless) unless --notheadless is passed
     const headless = !options.notheadless;
-    console.log(chalk.gray(`Debugging: Launching browser (headless: ${headless})...`));
+    logger.debug(`Launching browser (headless: ${headless})...`);
 
     const browser = await chromium.launch({ headless });
     try {
         const context = await getAuthenticatedContext(browser);
         const page = await context.newPage();
 
-        console.log(chalk.blue('Navigating to notebooks list...'));
+        logger.info('Navigating to notebooks list...');
         await page.goto(ONENOTE_URL);
 
         // Relaxed wait condition
         try {
-            console.log(chalk.gray('Waiting for page content (domcontentloaded)...'));
+            logger.debug('Waiting for page content (domcontentloaded)...');
             await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
         } catch (e) {
-            console.warn(chalk.yellow('Page load timeout/warning, proceeding to scrape anyway...'));
+            logger.warn('Page load timeout/warning, proceeding to scrape anyway...');
         }
 
-        console.log(chalk.blue('Waiting 20 seconds for dynamic content to render...'));
+        logger.info('Waiting 20 seconds for dynamic content to render...');
         await page.waitForTimeout(20000);
 
         // Dump main page content if requested
         if (options.dodump) {
-            console.log(chalk.yellow('Dumping main page content to debug_page_dump.html...'));
+            logger.warn('Dumping main page content to debug_page_dump.html...');
             const content = await page.content();
             await fs.writeFile(path.resolve(__dirname, '../debug_page_dump.html'), content);
         }
 
         // Try to locate the relevant iframe
-        console.log(chalk.blue('Looking for "OneNote File Browser" iframe...'));
+        logger.info('Looking for "OneNote File Browser" iframe...');
         const frameElement = await page.$('#FileBrowserIFrame');
         let frame = null;
 
         if (frameElement) {
-            console.log(chalk.green('Found iframe element #FileBrowserIFrame, switching to it...'));
+            logger.success('Found iframe element #FileBrowserIFrame, switching to it...');
             frame = await frameElement.contentFrame();
 
             if (frame) {
                 if (options.dodump) {
-                    console.log(chalk.yellow('Dumping iframe content to debug_frame_dump.html...'));
+                    logger.warn('Dumping iframe content to debug_frame_dump.html...');
                     const frameContent = await frame.content();
                     await fs.writeFile(path.resolve(__dirname, '../debug_frame_dump.html'), frameContent);
                 }
             } else {
-                console.error(chalk.red('Could not get contentFrame() from element.'));
+                logger.error('Could not get contentFrame() from element.');
             }
         } else {
-            console.error(chalk.red('Could not find #FileBrowserIFrame in main page.'));
+            logger.error('Could not find #FileBrowserIFrame in main page.');
             // Fallback to main page if iframe not found
             frame = page;
         }
@@ -69,7 +69,7 @@ async function listNotebooks(options = {}) {
         const scrapeTarget = frame || page;
 
         for (let i = 0; i < maxRetries; i++) {
-            console.log(chalk.gray(`Attempt ${i + 1}/${maxRetries} to find notebooks in frame...`));
+            logger.debug(`Attempt ${i + 1}/${maxRetries} to find notebooks in frame...`);
 
             notebooks = await scrapeTarget.evaluate(() => {
                 // FluentUI DetailsList selectors
@@ -99,12 +99,12 @@ async function listNotebooks(options = {}) {
             });
 
             if (notebooks.length > 0) {
-                console.log(chalk.green(`Found ${notebooks.length} notebooks!`));
+                logger.success(`Found ${notebooks.length} notebooks!`);
                 break;
             }
 
             if (i < maxRetries - 1) {
-                console.log(chalk.gray('No notebooks found yet, waiting 5 seconds...'));
+                logger.debug('No notebooks found yet, waiting 5 seconds...');
                 await page.waitForTimeout(5000);
             }
         }
@@ -127,7 +127,7 @@ async function listNotebooks(options = {}) {
         return uniqueNotebooks;
 
     } catch (e) {
-        console.error(chalk.red('Error listing notebooks:'), e);
+        logger.error('Error listing notebooks:', e);
         if (!options.keepOpen && browser) {
             await browser.close();
         }
@@ -140,7 +140,7 @@ async function listNotebooks(options = {}) {
 }
 
 async function openNotebook(page, scrapeTarget, notebookId) {
-    console.log(chalk.blue('Opening notebook...'));
+    logger.info('Opening notebook...');
     const selector = `div[data-automationid="${notebookId}"] button[role="link"]`;
 
     try {
@@ -149,17 +149,17 @@ async function openNotebook(page, scrapeTarget, notebookId) {
             throw new Error(`Could not find button for notebook ${notebookId}`);
         }
 
-        console.log(chalk.gray('Clicking notebook link...'));
+        logger.debug('Clicking notebook link...');
         await Promise.all([
             page.waitForLoadState('domcontentloaded'),
             btn.click()
         ]);
 
-        console.log(chalk.green('Notebook opened!'));
+        logger.success('Notebook opened!');
         await page.waitForTimeout(5000);
 
     } catch (e) {
-        console.error(chalk.red('Failed to open notebook'), e);
+        logger.error('Failed to open notebook', e);
         throw e;
     }
 }

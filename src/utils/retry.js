@@ -1,4 +1,4 @@
-const chalk = require('chalk');
+const logger = require('./logger');
 
 /**
  * Retry a function with exponential backoff
@@ -34,14 +34,14 @@ async function withRetry(fn, options = {}) {
 
             if (attempt === maxAttempts) {
                 if (!silent) {
-                    console.error(chalk.red(`${operationName} failed after ${maxAttempts} attempts: ${error.message}`));
+                    logger.error(`${operationName} failed after ${maxAttempts} attempts:`, error);
                 }
                 throw error;
             }
 
             if (!silent) {
-                console.log(chalk.yellow(`${operationName} failed (attempt ${attempt}/${maxAttempts}): ${error.message}`));
-                console.log(chalk.gray(`  Retrying in ${delayMs}ms...`));
+                logger.warn(`${operationName} failed (attempt ${attempt}/${maxAttempts}): ${error.message}`);
+                logger.debug(`  Retrying in ${delayMs}ms...`);
             }
 
             // Wait before retrying

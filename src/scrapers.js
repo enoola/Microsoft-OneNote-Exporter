@@ -1,4 +1,4 @@
-const chalk = require('chalk');
+const logger = require('./utils/logger');
 const { withRetry } = require('./utils/retry');
 
 /**
@@ -367,11 +367,7 @@ async function getPageContent(frame) {
                 else originalName = text.split('\n')[0].trim();
 
                 // Detailed logging for debugging
-                console.log(`[Scraper] Analyzing ${link.tagName} (ID: ${attachId}):
-      - title: "${title}"
-      - aria-label: "${ariaLabel}"
-      - text: "${text.substring(0, 30)}..."
-      - initialName: "${originalName}"`);
+                console.debug(`[Scraper] Analyzing ${link.tagName} (ID: ${attachId}):\n      - title: "${title}"\n      - aria-label: "${ariaLabel}"\n      - text: "${text.substring(0, 30)}..."\n      - initialName: "${originalName}"`);
 
                 if (!originalName || originalName === 'attached_file' || !fileExtRegex.test(originalName)) {
                     if (href) {
@@ -393,7 +389,7 @@ async function getPageContent(frame) {
                 }
                 if (!originalName) originalName = 'attached_file';
 
-                console.log(`[Scraper] Detected attachment: ${originalName} (ID: ${attachId}, Type: ${link.tagName})`);
+                console.debug(`[Scraper] Detected attachment: ${originalName} (ID: ${attachId}, Type: ${link.tagName})`);
                 attachmentInfos.push({ id: attachId, src: href, originalName: originalName, isCloud: isCloud });
                 link.setAttribute('data-local-file', attachId);
                 link.setAttribute('data-filename', originalName);
