@@ -54,6 +54,18 @@ The tool is built on **Node.js** and relies on three core pillars:
 - **The Exporter**: Determines the final unique filename on disk, then injects this **full filename** back into the HTML using `data-local-file` and `data-filename` attributes. It uses a robust escaped-ID regex to handle characters that would otherwise break JavaScript string replacements.
 - **The Parser**: Has a "Smart Extension" rule. It trusts the `data-local-file` attribute if it already contains a dot (indicating a full filename), ensuring perfect Obsidian-style Wikilinks like `[[assets/filename.xlsx.pdf]]` are generated regardless of the source element type.
 
+### 6. Resilient MFA & Transition Handling
+**Challenge**: Automated login would often fail on intermediate MFA screens ("Get a code to sign in") because the script caught "ghost" HTML from the previous page or couldn't find the "Other ways to sign in" link.
+**Solution**: Implemented a "Transition-Aware" state machine in `src/auth.js`.
+- **Stabilization Delays**: Added explicit waits for the email field to disappear and 1-second "settle" timeouts to allow the DOM to fully render.
+- **Heading-Based Truth**: The script cross-references the visible `h1` heading to definitively identify the screen type, regardless of what's in the underlying DOM.
+- **Brute-Force Interactivity**:
+    - Broad locators matching roles, text, and `data-testid`.
+    - "Force-click" to bypass Playwright's visibility guardrails during dynamic animations.
+    - **JS-Injection Fallback**: If locators fail, the script injects a direct `evaluate` script to scan and click the target element at the browser's engine level.
+- **Post-Login Persistence**: Automatically handles the "Stay signed in?" prompt to ensure the `auth.json` token has maximum longevity.
+- **Post-Login Persistence**: Automatically handles the "Stay signed in?" prompt to ensure the `auth.json` token has maximum longevity.
+
 ## Task History
 
 ### Phase 1: Foundation

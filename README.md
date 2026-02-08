@@ -47,8 +47,8 @@ node src/index.js login
 node src/index.js login --login "your-email@example.com" --password "your-password"
 ```
 
-> [!WARNING]
-> **MFA Limitation**: If your account requires Multi-Factor Authentication (MFA), the non-interactive mode **will not work**. You must use the manual `login` command to authenticate once in a visible browser. Once the `auth.json` file is created, subsequent `export` commands can run headlessly.
+> [!TIP]
+> **MFA Support**: The tool includes an advanced "Resilient MFA" handler. While some accounts may still require a one-time manual `login` in visible mode, the automated `login --login email --password pass` command now supports many MFA flows (like switching to password entry or "Stay signed in" prompts) automatically.
 
 ### 2. Interactive Export
 List available notebooks and select one to export.
