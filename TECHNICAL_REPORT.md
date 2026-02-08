@@ -76,3 +76,10 @@ The tool is built on **Node.js** and relies on three core pillars:
 - [x] CLI Progress bars & Stats
 - [x] Notebook Pre-selection (`--notebook`)
 - [x] Headless mode configuration
+
+### Phase 5: Automation & Debugging
+- [x] Non-interactive login automation (`--login`, `--password`)
+- [x] Multi-point error detection (Username/Password/Redirection errors)
+- [x] Comprehensive debug dumping (`--dodump`)
+- [x] Landing page auto-traversal
+- [x] Flexible success detection (URL + DOM indicators)

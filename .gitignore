@@ -60,3 +60,5 @@ auth.json
 output/
 debug_*
 .jest-cache/
+.test-temp/
+.tmp/

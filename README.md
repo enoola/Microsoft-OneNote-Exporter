@@ -35,11 +35,20 @@ npm install
 ## Usage
 
 ### 1. Authentication
-First, log in to your Microsoft Account. This launches a browser window for you to sign in.
+First, log in to your Microsoft Account. 
 
+**Manual Mode**: Launches a browser window for you to sign in.
 ```bash
 node src/index.js login
 ```
+
+**Non-Interactive Mode**: Provide credentials directly (useful for automated environments).
+```bash
+node src/index.js login --login "your-email@example.com" --password "your-password"
+```
+
+> [!WARNING]
+> **MFA Limitation**: If your account requires Multi-Factor Authentication (MFA), the non-interactive mode **will not work**. You must use the manual `login` command to authenticate once in a visible browser. Once the `auth.json` file is created, subsequent `export` commands can run headlessly.
 
 ### 2. Interactive Export
 List available notebooks and select one to export.
@@ -66,7 +75,11 @@ If you encounter issues, you can run in visible mode or dump DOM snapshots.
 # Run with a visible browser window (useful for debugging or manual login)
 node src/index.js export --notheadless
 
-# Dump HTML files for debugging
+# Visible mode for login automation
+node src/index.js login --login "email" --password "pass" --notheadless
+
+# Dump HTML files for debugging if automation fails
+node src/index.js login --login "email" --password "pass" --dodump
 node src/index.js export --dodump
 ```
 
