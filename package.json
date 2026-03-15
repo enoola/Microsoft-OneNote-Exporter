@@ -8,6 +8,8 @@
     },
     "scripts": {
         "start": "node src/index.js",
+        "clean": "rm -rf node_modules .jest-cache .test-temp .tmp debug_*.html .DS_Store logs *.log dist build coverage",
+        "cleanfull": "rm -rf node_modules output .jest-cache .test-temp .tmp auth.json debug_*.html .DS_Store logs *.log dist build coverage",
         "test": "jest",
         "test:watch": "jest --watch"
     },

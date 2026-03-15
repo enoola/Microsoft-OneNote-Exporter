@@ -89,6 +89,25 @@ node src/index.js export --dodump
 > [!WARNING]
 > The `--dodump` option saves the HTML content of every page and frame encountered to disk. For large notebooks, this can consume a significant amount of disk space and create thousands of files. Use it only for troubleshooting specific issues.
 
+## Maintenance & Cleanup
+
+The project includes built-in scripts to clean up generated files, logs, and caches.
+
+### Safe Clean
+Removes temporary files, logs, and caches while **preserving** your exported notebooks (`output/`) and authentication session (`auth.json`).
+```bash
+npm run clean
+```
+
+### Full Reset
+Performs a complete reset by removing everything, including your exported notebooks and saved login information.
+```bash
+npm run cleanfull
+```
+
+> [!CAUTION]
+> `npm run cleanfull` will delete your `auth.json` and `output/` folders. You will need to log in again and re-run your exports.
+
 ## Cumulative Example
 You can combine all options for a fully automated, visible, and documented run:
 

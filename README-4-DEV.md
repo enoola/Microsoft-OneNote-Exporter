@@ -45,6 +45,15 @@ npm test:watch
 npm test -- --coverage
 ```
 
+### Cleanup & Reset
+
+Use these scripts to manage generated files and caches:
+
+| Command | Description | Targeted Files/Dirs |
+| :--- | :--- | :--- |
+| `npm run clean` | **Safe Clean**: Preserves data and session. | `node_modules`, `.jest-cache`, `.tmp`, `logs`, etc. |
+| `npm run cleanfull` | **Full Reset**: Removes everything. | Same as above + `output/` and `auth.json`. |
+
 ### Test Structure
 
 ```
