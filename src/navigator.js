@@ -20,7 +20,7 @@ async function listNotebooks(options = {}) {
         logger.info('Navigating to notebooks list...');
         await page.goto(ONENOTE_URL);
 
-        // Relaxed wait condition
+        // Wait for initial DOM content
         try {
             logger.debug('Waiting for page content (domcontentloaded)...');
             await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
@@ -28,8 +28,18 @@ async function listNotebooks(options = {}) {
             logger.warn('Page load timeout/warning, proceeding to scrape anyway...');
         }
 
-        logger.info('Waiting 20 seconds for dynamic content to render...');
-        await page.waitForTimeout(20000);
+        // Wait for all in-flight redirects to settle (Microsoft auth chain can do 3-4 hops).
+        // networkidle waits until there are no network requests for 500ms.
+        logger.info('Waiting for page to fully settle after redirects...');
+        try {
+            await page.waitForLoadState('networkidle', { timeout: 45000 });
+        } catch (e) {
+            logger.warn('Network idle timeout — continuing anyway...');
+        }
+
+        // Extra grace period for SPA JS rendering
+        logger.info('Waiting 5 seconds for dynamic content to render...');
+        await page.waitForTimeout(5000);
 
         // Dump main page content if requested
         if (options.dodump) {
@@ -38,14 +48,24 @@ async function listNotebooks(options = {}) {
             await fs.writeFile(path.resolve(__dirname, '../debug_page_dump.html'), content);
         }
 
-        // Try to locate the relevant iframe
+        // Try to locate the relevant iframe — wrap in try/catch in case the page
+        // navigates again mid-call (execution context destroyed).
         logger.info('Looking for "OneNote File Browser" iframe...');
-        const frameElement = await page.$('#FileBrowserIFrame');
+        let frameElement = null;
+        try {
+            frameElement = await page.$('#FileBrowserIFrame');
+        } catch (e) {
+            logger.warn(`Could not query #FileBrowserIFrame (${e.message}) — falling back to main page.`);
+        }
         let frame = null;
 
         if (frameElement) {
             logger.success('Found iframe element #FileBrowserIFrame, switching to it...');
-            frame = await frameElement.contentFrame();
+            try {
+                frame = await frameElement.contentFrame();
+            } catch (e) {
+                logger.warn(`contentFrame() failed (${e.message}) — falling back to main page.`);
+            }
 
             if (frame) {
                 if (options.dodump) {

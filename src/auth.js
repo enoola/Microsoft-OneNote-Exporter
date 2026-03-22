@@ -4,6 +4,25 @@ const logger = require('./utils/logger');
 const { AUTH_FILE, ONENOTE_URL } = require('./config');
 const readline = require('readline');
 
+// Companion metadata file — stores email + login time for the GUI display
+const AUTH_META_FILE = AUTH_FILE.replace('auth.json', 'auth-meta.json');
+
+/** Returns { email, loginTime } from auth-meta.json, or null if not found. */
+async function getAuthMeta() {
+    try {
+        if (await fs.pathExists(AUTH_META_FILE)) {
+            return await fs.readJson(AUTH_META_FILE);
+        }
+    } catch (e) {}
+    return null;
+}
+
+/** Deletes auth.json and auth-meta.json (full logout). */
+async function logout() {
+    await fs.remove(AUTH_FILE);
+    await fs.remove(AUTH_META_FILE);
+}
+
 /**
  * Prompts the user for input in the terminal.
  */
@@ -387,8 +406,263 @@ async function checkAuth() {
     return fs.pathExists(AUTH_FILE);
 }
 
+/**
+ * Electron-aware login adapter.
+ * Identical logic to login() but emits progress via sendEvent(type, payload)
+ * instead of using readline stdin or the logger module.
+ *
+ * @param {object} credentials  - { login, password, notheadless, dodump }
+ * @param {function} sendEvent  - (type, payload) => void — forwards events to the renderer
+ * @param {object} ipcMain      - the electron ipcMain, used for OTC round-trip dialogs
+ */
+async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
+    const { login: email, password } = credentials;
+    const isAutomated = !!(email && password);
+    const headless = !credentials.notheadless && isAutomated;
+
+    const log = (level, message) => sendEvent('log', { level, message });
+
+    log('debug', 'Authentication Module: Version 4.4-DEBUG starting (Electron mode)...');
+
+    if (isAutomated) {
+        log('info', `Attempting automated login for ${email}...`);
+    } else {
+        log('info', 'Launching browser for manual authentication...');
+        log('warn', 'Please log in to your Microsoft account in the browser window.');
+        log('warn', 'The script will wait until you successfully reach the notebook list.');
+    }
+
+    const browser = await chromium.launch({ headless: !!headless });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+        await page.goto(ONENOTE_URL);
+
+        if (isAutomated) {
+            log('step', 'Automating login steps...');
+
+            // 0. Handle landing page
+            try {
+                const signInButton = page.getByRole('button', { name: 'Sign in' }).first();
+                await signInButton.waitFor({ state: 'visible', timeout: 10000 });
+                log('info', 'Landing page detected. Clicking "Sign in"...');
+                await signInButton.click({ noWaitAfter: true });
+                log('debug', 'Clicked "Sign in", waiting for login form...');
+            } catch (e) {
+                log('debug', 'Landing page not detected or "Sign in" button not found within timeout.');
+            }
+
+            // 1. Enter Email
+            try {
+                await page.waitForSelector('input[name="loginfmt"]', { state: 'visible', timeout: 30000 });
+                await page.fill('input[name="loginfmt"]', email);
+                log('info', 'Email entered. Clicking "Next"...');
+                await page.click('input[type="submit"]');
+                log('debug', 'Waiting for email field to disappear...');
+                await page.waitForSelector('input[name="loginfmt"]', { state: 'hidden', timeout: 15000 }).catch(() => {
+                    log('debug', 'Email field still present, proceeding with caution.');
+                });
+                await page.waitForTimeout(1000);
+                const usernameError = page.locator('#usernameError');
+                if (await usernameError.isVisible({ timeout: 2000 })) {
+                    const errorMsg = await usernameError.textContent();
+                    throw new Error(`Login Error (Username): ${errorMsg?.trim()}`);
+                }
+            } catch (e) {
+                log('error', `Failed to enter email: ${e.message}`);
+                throw e;
+            }
+
+            // 1.5. Handle intermediate screens (MFA selection)
+            try {
+                const pageTitle = (await page.title()).trim();
+                const pageHeading = (await page.locator('h1, [role="heading"]').first().textContent().catch(() => '')).trim();
+                log('debug', `Settled State: Title="${pageTitle}" | Heading="${pageHeading}"`);
+                log('debug', 'Checking for intermediate MFA/Sign-in option screens...');
+
+                const result = await Promise.race([
+                    page.waitForSelector('text=/Other ways to sign in/i', { state: 'visible', timeout: 15000 }).then(() => 'other_ways'),
+                    page.waitForSelector('text=/Get a code to sign in/i', { state: 'visible', timeout: 15000 }).then(() => 'other_ways'),
+                    page.waitForSelector('text=/Verify your identity/i', { state: 'visible', timeout: 15000 }).then(() => 'other_ways'),
+                    page.waitForSelector('text=/Use your password/i', { state: 'visible', timeout: 15000 }).then(() => 'use_password'),
+                    page.waitForSelector('text=/Approve a request on my Microsoft Authenticator app/i', { state: 'visible', timeout: 5000 }).then(() => 'approve_app'),
+                    page.waitForSelector('input[name="passwd"]', { state: 'visible', timeout: 15000 }).then(() => 'password'),
+                    page.waitForFunction(() => {
+                        const h = document.querySelector('h1, [role="heading"]')?.textContent || '';
+                        return h.includes('Get a code') || h.includes('Verify your identity');
+                    }, { timeout: 15000 }).then(() => 'other_ways'),
+                ]).catch((err) => {
+                    log('debug', `Detection race timed out or failed: ${err.message}`);
+                    return 'timeout';
+                });
+
+                log('debug', `Intermediate screen detection result: ${result}`);
+
+                if (result === 'other_ways' || pageHeading.includes('Get a code') || pageHeading.includes('Verify your identity')) {
+                    log('info', 'Detected MFA/Verification screen. Attempting to locate "Other ways to sign in"...');
+                    const otherWays = page.getByRole('button', { name: /Other ways to sign in|Sign in another way/i })
+                        .or(page.getByText(/Other ways to sign in|Sign in another way/i)).first();
+                    try {
+                        await otherWays.waitFor({ state: 'attached', timeout: 15000 });
+                        const isVisible = await otherWays.isVisible();
+                        log('debug', `"Other ways" link visibility: ${isVisible}`);
+                        log('info', 'Clicking "Other ways to sign in"...');
+                        try {
+                            await otherWays.click({ timeout: 5000 });
+                        } catch (e) {
+                            await otherWays.click({ force: true, timeout: 5000 });
+                        }
+                    } catch (e) {
+                        log('warn', `MFA link interaction failed: ${e.message}`);
+                        const clicked = await page.evaluate(() => {
+                            const elements = Array.from(document.querySelectorAll('span, a, button'));
+                            const target = elements.find(el =>
+                                el.textContent.toLowerCase().includes('other ways to sign in') ||
+                                el.textContent.toLowerCase().includes('sign in another way')
+                            );
+                            if (target) { target.click(); return true; }
+                            return false;
+                        });
+                        if (!clicked && pageHeading.includes('Get a code')) {
+                            throw new Error('STUCK: "Other ways to sign in" link not found even via JS scan.');
+                        }
+                    }
+                    const subResult = await Promise.race([
+                        page.waitForSelector('text=/Use your password/i', { state: 'visible', timeout: 15000 }).then(() => 'use_password'),
+                        page.waitForSelector('#idA_PWD_SwitchToPassword', { state: 'visible', timeout: 15000 }).then(() => 'use_password'),
+                        page.waitForSelector('text=/Select a verification method/i', { state: 'visible', timeout: 15000 }).then(() => 'other_ways_list'),
+                    ]).catch(() => 'timeout');
+
+                    if (subResult === 'use_password') {
+                        log('info', 'Selecting "Use your password" option...');
+                        await page.click('text=/Use your password/i');
+                    } else if (subResult === 'other_ways_list') {
+                        await page.click('text=/Password|Use your password/i');
+                    }
+                } else if (result === 'use_password') {
+                    await page.click('text="Use your password"');
+                } else if (result === 'approve_app') {
+                    const otherLink = page.locator('text="Other ways to sign in", #signInAnotherWay').first();
+                    if (await otherLink.isVisible()) {
+                        await otherLink.click();
+                        await page.waitForSelector('text="Use your password"', { state: 'visible', timeout: 10000 });
+                        await page.click('text="Use your password"');
+                    }
+                }
+            } catch (e) {
+                log('debug', `Intermediate screen handler encountered a fatal issue: ${e.message}`);
+            }
+
+            // 2. Enter Password
+            try {
+                await page.waitForSelector('input[name="passwd"]', { state: 'visible', timeout: 30000 });
+                await page.fill('input[name="passwd"]', password);
+                const submitButton = page.locator('input[type="submit"], button[type="submit"]').filter({ hasText: /Sign in|Next|Finish/i }).first();
+                await submitButton.waitFor({ state: 'visible', timeout: 10000 });
+                if (await submitButton.isDisabled()) { await page.waitForTimeout(1000); }
+                await submitButton.click();
+                const passwordError = page.locator('#passwordError');
+                if (await passwordError.isVisible({ timeout: 2000 })) {
+                    const errorMsg = await passwordError.textContent();
+                    throw new Error(`Login Error (Password): ${errorMsg?.trim()}`);
+                }
+            } catch (e) {
+                throw e;
+            }
+
+            // 2.5. Handle post-password MFA/Verification (OTC prompt via GUI dialog)
+            try {
+                const verificationScreen = await Promise.race([
+                    page.waitForSelector('text="Verify your identity"', { timeout: 5000 }).then(() => 'verify'),
+                    page.waitForSelector('text="Enter code"', { timeout: 5000 }).then(() => 'enter_code'),
+                    page.waitForSelector('input[name="otc"]', { timeout: 5000 }).then(() => 'otc_input')
+                ]).catch(() => null);
+
+                if (verificationScreen) {
+                    log('warn', 'MFA/Verification screen detected.');
+                    log('step', 'A verification code is required. Please check your email or authenticator app.');
+
+                    // Ask the renderer to show the OTC dialog and wait for user input via IPC
+                    sendEvent('otc-required', {});
+                    const code = await new Promise((resolve) => {
+                        ipcMain.once('otc-reply', (event, value) => resolve(value));
+                    });
+
+                    if (await page.locator('input[name="otc"]').isVisible()) {
+                        await page.fill('input[name="otc"]', code);
+                    } else if (await page.locator('input[type="tel"]').isVisible()) {
+                        await page.fill('input[type="tel"]', code);
+                    } else {
+                        await page.locator('input[type="text"]:visible, input[type="tel"]:visible').first().fill(code);
+                    }
+                    await page.click('input[type="submit"]');
+                }
+            } catch (e) {
+                log('debug', `Post-password verification handling skipped or failed: ${e.message}`);
+            }
+
+            // 3. Handle "Stay signed in?" prompt
+            try {
+                const staySignedIn = page.getByText(/Stay signed in?/i).or(page.locator('#KmsiDescription')).first();
+                await staySignedIn.waitFor({ state: 'visible', timeout: 7000 });
+                log('info', 'Detected "Stay signed in?" prompt.');
+                const dontShowAgain = page.locator('input[name="DontShowAgain"], #KmsiCheckboxField').first();
+                if (await dontShowAgain.isVisible()) { await dontShowAgain.check().catch(() => {}); }
+                const yesButton = page.getByRole('button', { name: /^Yes$/i })
+                    .or(page.locator('button[data-testid="primaryButton"]'))
+                    .or(page.locator('#idSIButton9')).first();
+                log('info', 'Clicking "Yes" to stay signed in...');
+                await yesButton.click();
+            } catch (e) {
+                log('debug', `Stay signed in prompt did not appear: ${e.message}`);
+            }
+
+            // 4. Wait for redirect to notebooks list
+            try {
+                log('info', 'Waiting for redirection to notebooks list...');
+                await Promise.any([
+                    page.waitForURL(url => url.toString().includes('/notebooks'), { timeout: 60000 }),
+                    page.waitForSelector('text="My notebooks"', { state: 'visible', timeout: 60000 }),
+                    page.waitForSelector('text="Create new notebook"', { state: 'visible', timeout: 60000 }),
+                    page.waitForSelector('text="Welcome, "', { state: 'visible', timeout: 60000 })
+                ]);
+                log('success', 'Notebooks list detected.');
+            } catch (e) {
+                throw e;
+            }
+        } else {
+            // Manual login: tell the renderer to show the "waiting" state
+            log('warn', 'Manual login flow — please log in in the browser window that just opened.');
+            sendEvent('manual-login-ready', {});
+            // Wait for the renderer to send 'manual-login-confirmed' (user clicks "I've logged in" button)
+            await new Promise((resolve) => {
+                ipcMain.once('manual-login-confirmed', () => resolve());
+            });
+        }
+
+        log('info', 'Saving authentication state...');
+        await context.storageState({ path: AUTH_FILE });
+        // Persist email + time so the GUI can show "Logged in as X since HH:MM"
+        await fs.writeJson(AUTH_META_FILE, {
+            email: email || 'manual login',
+            loginTime: new Date().toISOString()
+        });
+        log('success', `Authentication successful! State saved to ${AUTH_FILE}`);
+        return { success: true, email: email || 'manual login', loginTime: new Date().toISOString() };
+    } catch (error) {
+        log('error', `Authentication failed or cancelled: ${error.message}`);
+        return { success: false, error: error.message };
+    } finally {
+        await browser.close();
+    }
+}
+
 module.exports = {
     login,
+    loginForElectron,
     getAuthenticatedContext,
-    checkAuth
+    checkAuth,
+    getAuthMeta,
+    logout
 };

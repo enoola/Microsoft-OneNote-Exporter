@@ -34,6 +34,9 @@ jspm_packages/
 # Optional eslint cache
 .eslintcache
 
+# Jest cache
+.jest-cache/
+
 # Optional REPL history
 .node_repl_history
 
@@ -57,8 +60,23 @@ Thumbs.db
 
 # other stuff
 auth.json
+auth-meta.json
 output/
 debug_*
 .jest-cache/
 .test-temp/
 .tmp/
+
+# Electron-builder
+dist-native/
+.electron-builder/
+
+# Packed binaries
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.flatpak
+*.snap
+*.AppImage.blockmap

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'">
+    <title>OneNote Exporter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ── OTC Modal ─────────────────────────────────────────────────── -->
+    <div id="otc-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="otc-title">
+        <div class="modal-card">
+            <div class="modal-icon">🔐</div>
+            <h2 id="otc-title">Verification Required</h2>
+            <p>Microsoft sent a verification code. Enter it below.</p>
+            <input id="otc-input" type="text" placeholder="123456" maxlength="8" autocomplete="one-time-code">
+            <button id="otc-submit" class="btn btn-primary">Submit Code</button>
+        </div>
+    </div>
+
+    <!-- ── Section-Lock Modal ─────────────────────────────────────────── -->
+    <div id="lock-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="lock-title">
+        <div class="modal-card">
+            <div class="modal-icon">🔒</div>
+            <h2 id="lock-title">Password-Protected Section</h2>
+            <p id="lock-section-name" class="lock-section"></p>
+            <p>Please unlock the section in the browser window that has opened, then click the button below.</p>
+            <button id="lock-confirm" class="btn btn-primary">Section Unlocked — Continue</button>
+        </div>
+    </div>
+
+    <!-- ── Manual Login Modal ─────────────────────────────────────────── -->
+    <div id="manual-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="manual-title">
+        <div class="modal-card">
+            <div class="modal-icon">🌐</div>
+            <h2 id="manual-title">Manual Login</h2>
+            <p>A browser window has opened. Please sign in to your Microsoft account and navigate to your Notebooks list.</p>
+            <p class="hint">Once you can see your notebooks, click the button below.</p>
+            <button id="manual-confirm" class="btn btn-primary">✓ I've Logged In</button>
+        </div>
+    </div>
+
+    <!-- ── Main Layout ────────────────────────────────────────────────── -->
+    <div class="app">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">📓</span>
+                <span class="logo-text">OneNote<br><strong>Exporter</strong></span>
+            </div>
+
+            <nav class="nav">
+                <button class="nav-item active" data-view="login" id="nav-login">
+                    <span class="nav-icon">🔑</span> Login
+                </button>
+                <button class="nav-item" data-view="export" id="nav-export" disabled>
+                    <span class="nav-icon">📤</span> Export
+                </button>
+            </nav>
+
+            <div class="auth-badge" id="auth-badge">
+                <span class="badge-dot" id="badge-dot"></span>
+                <div class="badge-info">
+                    <span id="badge-label">Checking…</span>
+                    <span id="badge-user" class="badge-user"></span>
+                    <span id="badge-since" class="badge-since"></span>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <span class="version">v1.0.0 — Electron Mode</span>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="content">
+
+            <!-- ── Login View ───────────────────────────────────────── -->
+            <section class="view active" id="view-login">
+                <div class="view-header">
+                    <h1>Microsoft Login</h1>
+                    <p class="subtitle">Authenticate with your Microsoft account to access your OneNote notebooks.</p>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">
+                        <span>🤖</span> Automated Login
+                        <span class="tag">Recommended</span>
+                    </h3>
+                    <p class="card-desc">Enter your credentials and the tool will log in for you automatically.</p>
+
+                    <div class="form-group">
+                        <label for="email">Microsoft Email</label>
+                        <input type="email" id="email" placeholder="yourname@outlook.com" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="••••••••••" autocomplete="current-password">
+                    </div>
+
+                    <div class="form-row">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="notheadless">
+                            <span class="toggle-text">Show browser window</span>
+                        </label>
+                    </div>
+
+                    <button id="btn-login" class="btn btn-primary btn-full">
+                        <span class="btn-icon">🔑</span> <span id="btn-login-label">Login</span>
+                    </button>
+                </div>
+
+                <div class="card card-alt">
+                    <h3 class="card-title"><span>🔱️</span> Manual Login</h3>
+                    <p class="card-desc">Opens a browser window — you log in yourself. Useful if you use MFA / SSO.</p>
+                    <button id="btn-manual-login" class="btn btn-secondary btn-full">
+                        Open Browser for Manual Login
+                    </button>
+                </div>
+
+                <!-- Logout button (hidden until logged in) -->
+                <div id="logout-section" style="display:none">
+                    <button id="btn-logout" class="btn btn-logout btn-full">
+                        🚪 Logout
+                    </button>
+                </div>
+
+                <!-- Log console for login -->
+                <div class="log-panel" id="login-log-panel">
+                    <div class="log-header">
+                        <span>Activity Log</span>
+                        <button class="log-clear" id="login-log-clear">Clear</button>
+                    </div>
+                    <div class="log-body" id="login-log"></div>
+                </div>
+            </section>
+
+            <!-- ── Export View ──────────────────────────────────────── -->
+            <section class="view" id="view-export">
+                <div class="view-header">
+                    <h1>Export Notebook</h1>
+                    <p class="subtitle">Select a notebook and export it to Obsidian-compatible Markdown.</p>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title"><span>📚</span> Notebook Selection</h3>
+
+                    <div class="form-group">
+                        <label for="notebook-select">Notebook</label>
+                        <div class="select-wrapper">
+                            <select id="notebook-select">
+                                <option value="">— Loading notebooks… —</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button id="btn-refresh-notebooks" class="btn btn-ghost btn-sm">↺ Refresh list</button>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title"><span>⚙️</span> Export Options</h3>
+                    <div class="options-grid">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="export-notheadless">
+                            <span class="toggle-text">Show browser during export</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="export-nopassasked">
+                            <span class="toggle-text">Skip password-protected sections</span>
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-top:8px">
+                        <label for="export-timeout">Download timeout per asset</label>
+                        <div class="select-wrapper">
+                            <select id="export-timeout">
+                                <option value="30000">30 seconds</option>
+                                <option value="60000" selected>60 seconds (default)</option>
+                                <option value="120000">2 minutes</option>
+                                <option value="180000">3 minutes</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" id="progress-card" style="display:none">
+                    <h3 class="card-title"><span>⏳</span> Progress</h3>
+                    <div class="progress-info">
+                        <span id="progress-label">Starting…</span>
+                        <span id="progress-counts">0 pages · 0 assets</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                </div>
+
+                <div class="export-actions">
+                    <button id="btn-export" class="btn btn-primary btn-large">
+                        <span class="btn-icon">📤</span> Start Export
+                    </button>
+                    <button id="btn-open-output" class="btn btn-ghost" style="display:none">
+                        📂 Open Output Folder
+                    </button>
+                </div>
+
+                <!-- Log console for export -->
+                <div class="log-panel" id="export-log-panel">
+                    <div class="log-header">
+                        <span>Export Log</span>
+                        <button class="log-clear" id="export-log-clear">Clear</button>
+                    </div>
+                    <div class="log-body" id="export-log"></div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

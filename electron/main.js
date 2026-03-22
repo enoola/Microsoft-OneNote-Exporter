@@ -1,0 +1,125 @@
+// electron/main.js
+'use strict';
+
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const path = require('path');
+
+const { loginForElectron, checkAuth, getAuthMeta, logout } = require('../src/auth');
+const { runExportForElectron } = require('../src/exporter');
+const { listNotebooks } = require('../src/navigator');
+
+let mainWindow = null;
+
+function createWindow() {
+    mainWindow = new BrowserWindow({
+        width: 960,
+        height: 700,
+        minWidth: 800,
+        minHeight: 600,
+        backgroundColor: '#0f0f13',
+        titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: false // needed so preload can require electron
+        },
+        icon: path.join(__dirname, 'assets', 'icon.png'),
+        show: false
+    });
+
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+    // Show window only once ready (avoids flash)
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
+    });
+
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
+}
+
+// ─── Helper: broadcast events from main process to renderer ────────────────
+function sendToRenderer(type, payload) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('main-event', { type, payload });
+    }
+}
+
+// ─── IPC Handlers ────────────────────────────────────────────────────────────
+
+// Check if user is authenticated — also returns email + loginTime for the GUI
+ipcMain.handle('check-auth', async () => {
+    const isAuthenticated = await checkAuth();
+    const meta = isAuthenticated ? await getAuthMeta() : null;
+    return {
+        isAuthenticated,
+        email: meta?.email || null,
+        loginTime: meta?.loginTime || null
+    };
+});
+
+// Logout — delete auth state files
+ipcMain.handle('logout', async () => {
+    await logout();
+    return { success: true };
+});
+
+// Login (automated or manual)
+ipcMain.handle('start-login', async (_event, credentials) => {
+    const result = await loginForElectron(
+        credentials || {},
+        (type, payload) => sendToRenderer(type, payload),
+        ipcMain
+    );
+    return result;
+});
+
+// List notebooks — mutex-protected so only one Playwright session runs at a time
+let _notebooksPromise = null;
+ipcMain.handle('list-notebooks', async () => {
+    // If a fetch is already in flight, reuse it instead of launching a second browser
+    if (_notebooksPromise) {
+        return _notebooksPromise;
+    }
+    _notebooksPromise = (async () => {
+        try {
+            const notebooks = await listNotebooks({});
+            return { success: true, notebooks };
+        } catch (e) {
+            return { success: false, error: e.message, notebooks: [] };
+        } finally {
+            _notebooksPromise = null;
+        }
+    })();
+    return _notebooksPromise;
+});
+
+// Export a notebook
+ipcMain.handle('start-export', async (_event, options) => {
+    const result = await runExportForElectron(
+        options || {},
+        (type, payload) => sendToRenderer(type, payload),
+        ipcMain
+    );
+    return result;
+});
+
+// Open the output folder in Finder / Explorer
+ipcMain.handle('open-output-folder', async (_event, folderPath) => {
+    shell.openPath(folderPath);
+});
+
+// ─── App lifecycle ────────────────────────────────────────────────────────────
+app.whenReady().then(() => {
+    createWindow();
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+});
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+});
