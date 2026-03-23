@@ -12,17 +12,12 @@ on:
       - master
   workflow_dispatch:
 
-# Opt into Node.js 24 for JavaScript actions (avoids deprecation warnings)
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-      fail-fast: false
 
     steps:
       - name: Checkout code
@@ -32,16 +27,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm' # Enable npm caching for faster builds
 
       - name: Install system dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools rpm
+          sudo apt-get install -y libarchive-tools
+        # Usually electron-builder works out of the box, but occasionally requires extra dependencies on Linux
 
       - name: Install dependencies
-        run: npm ci # Faster and more reliable than npm install for CI
+        run: npm install
 
       - name: Build Application
         run: npm run electron:build
@@ -58,6 +53,4 @@ jobs:
             dist/*.AppImage
             dist/*.zip
             dist/*.tar.gz
-            dist/latest*.yml
           retention-days: 90
-          if-no-files-found: warn # Helpful for debugging missing artifacts
