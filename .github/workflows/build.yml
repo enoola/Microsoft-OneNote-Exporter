@@ -12,6 +12,10 @@ on:
       - master
   workflow_dispatch:
 
+# Opt into Node.js 24 for JavaScript actions (avoids deprecation warnings)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
