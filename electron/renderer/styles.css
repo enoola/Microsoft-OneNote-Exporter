@@ -68,7 +68,7 @@ html, body {
     margin-bottom: 8px;
 }
 
-.logo-icon { font-size: 28px; }
+.logo-icon { width: 28px; height: 28px; object-fit: contain; }
 
 .logo-text {
     font-size: 13px;
