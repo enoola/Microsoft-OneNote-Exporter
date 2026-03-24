@@ -24,7 +24,7 @@ function createWindow() {
             nodeIntegration: false,
             sandbox: false // needed so preload can require electron
         },
-        icon: path.join(__dirname, 'assets', 'icon.png'),
+        icon: path.join(__dirname, 'assets', process.platform === 'darwin' ? 'icon.icns' : 'icon.png'),
         show: false
     });
 
@@ -113,6 +113,12 @@ ipcMain.handle('open-output-folder', async (_event, folderPath) => {
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+    // Override the Dock icon on macOS in dev mode — must be called after ready,
+    // and Electron's dock API requires a PNG (not .icns).
+    if (process.platform === 'darwin' && app.dock) {
+        app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'));
+    }
+
     createWindow();
 
     app.on('activate', () => {

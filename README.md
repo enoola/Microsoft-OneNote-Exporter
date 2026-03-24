@@ -1,6 +1,10 @@
 # OneNote to Obsidian Exporter
 
+![App Icon](build/icon.png)
+
 A robust, automated tool to export Microsoft OneNote notebooks into Obsidian-compatible Markdown folders. This tool preserves your notebook's hierarchy, downloads all attachments (PDFs, images, videos), and correctly resolves internal links.
+
+Available as both a **CLI tool** and a **native desktop app** (Electron GUI) for Mac, Windows, and Linux.
 
 > [!IMPORTANT]
 > **New to the project?** Follow the [Installation Guide](INSTALLATION.md) to set up your environment on Mac, Windows, or Linux.
@@ -26,7 +30,32 @@ A robust, automated tool to export Microsoft OneNote notebooks into Obsidian-com
   - Manual skip mode (`--nopassasked`) for hands-free backups in visible mode.
 - **Automation Ready**: Check/Login/Export commands with CLI flags for fully automated workflows.
 
-## Installation
+## Electron GUI
+
+A desktop application with a graphical interface is available for a more user-friendly experience.
+
+### Run in development mode
+```bash
+npm run electron:dev
+```
+
+### Build a distributable package
+```bash
+# macOS (DMG)
+npm run electron:build:mac
+
+# Windows (installer)
+npm run electron:build:win
+
+# Linux (AppImage)
+npm run electron:build:linux
+```
+
+Built packages are output to the `dist/` folder.
+
+---
+
+## Installation (CLI)
 
 ```bash
 npm install
