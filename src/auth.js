@@ -13,7 +13,7 @@ async function getAuthMeta() {
         if (await fs.pathExists(AUTH_META_FILE)) {
             return await fs.readJson(AUTH_META_FILE);
         }
-    } catch (e) {}
+    } catch (e) { }
     return null;
 }
 
@@ -413,22 +413,22 @@ async function checkAuth() {
         browser = await chromium.launch({ headless: true });
         const context = await browser.newContext({ storageState: AUTH_FILE });
         const page = await context.newPage();
-        
+
         // Go to OneNote URL
         await page.goto(ONENOTE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        
+
         // Wait briefly to allow client-side redirects to Microsoft login pages if session is dead
         await page.waitForTimeout(2000);
-        
+
         const url = page.url();
         const isLoginUrl = url.includes('login.live.com') || url.includes('login.microsoftonline.com');
-        
+
         if (isLoginUrl) {
             logger.warn('Authentication session has expired. Deleting stale auth state.');
             await logout();
             return false;
         }
-        
+
         // Check for common error pages or other signs of invalid auth if necessary
         return true;
     } catch (e) {
@@ -437,6 +437,7 @@ async function checkAuth() {
         // we default to true to prevent accidentally logging out the user.
         return true;
     } finally {
+        logger.debug(`Looks like user is logged in.`);
         if (browser) {
             await browser.close();
         }
@@ -645,7 +646,7 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 await staySignedIn.waitFor({ state: 'visible', timeout: 7000 });
                 log('info', 'Detected "Stay signed in?" prompt.');
                 const dontShowAgain = page.locator('input[name="DontShowAgain"], #KmsiCheckboxField').first();
-                if (await dontShowAgain.isVisible()) { await dontShowAgain.check().catch(() => {}); }
+                if (await dontShowAgain.isVisible()) { await dontShowAgain.check().catch(() => { }); }
                 const yesButton = page.getByRole('button', { name: /^Yes$/i })
                     .or(page.locator('button[data-testid="primaryButton"]'))
                     .or(page.locator('#idSIButton9')).first();
