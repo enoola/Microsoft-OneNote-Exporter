@@ -403,7 +403,44 @@ async function getAuthenticatedContext(browser) {
 }
 
 async function checkAuth() {
-    return fs.pathExists(AUTH_FILE);
+    if (!(await fs.pathExists(AUTH_FILE))) {
+        return false;
+    }
+
+    let browser;
+    try {
+        logger.debug('Verifying authentication session...');
+        browser = await chromium.launch({ headless: true });
+        const context = await browser.newContext({ storageState: AUTH_FILE });
+        const page = await context.newPage();
+        
+        // Go to OneNote URL
+        await page.goto(ONENOTE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        
+        // Wait briefly to allow client-side redirects to Microsoft login pages if session is dead
+        await page.waitForTimeout(2000);
+        
+        const url = page.url();
+        const isLoginUrl = url.includes('login.live.com') || url.includes('login.microsoftonline.com');
+        
+        if (isLoginUrl) {
+            logger.warn('Authentication session has expired. Deleting stale auth state.');
+            await logout();
+            return false;
+        }
+        
+        // Check for common error pages or other signs of invalid auth if necessary
+        return true;
+    } catch (e) {
+        logger.debug(`Session verification encountered an error (timeout/network): ${e.message}`);
+        // If we couldn't load the page properly due to network or timeout, 
+        // we default to true to prevent accidentally logging out the user.
+        return true;
+    } finally {
+        if (browser) {
+            await browser.close();
+        }
+    }
 }
 
 /**

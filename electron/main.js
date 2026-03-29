@@ -1,7 +1,7 @@
 // electron/main.js
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 
 const { loginForElectron, checkAuth, getAuthMeta, logout } = require('../src/auth');
@@ -94,6 +94,24 @@ ipcMain.handle('list-notebooks', async () => {
         }
     })();
     return _notebooksPromise;
+});
+
+// Get default export directory
+ipcMain.handle('get-default-directory', async () => {
+    return path.join(app.getPath('downloads'), 'Microsoft-OneNote-Exporter_Exports');
+});
+
+// Select a directory
+ipcMain.handle('select-directory', async (_event, defaultPath) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Export Directory',
+        defaultPath: defaultPath,
+        properties: ['openDirectory', 'createDirectory']
+    });
+    if (canceled || filePaths.length === 0) {
+        return null;
+    }
+    return filePaths[0];
 });
 
 // Export a notebook
