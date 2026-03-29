@@ -176,6 +176,13 @@
                         </label>
                     </div>
                     <div class="form-group" style="margin-top:8px">
+                        <label for="export-directory">Export Directory</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="export-directory" style="flex: 1;" readonly>
+                            <button id="btn-select-directory" class="btn btn-secondary" style="padding: 10px 14px;">Browse…</button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px">
                         <label for="export-timeout">Download timeout per asset</label>
                         <div class="select-wrapper">
                             <select id="export-timeout">

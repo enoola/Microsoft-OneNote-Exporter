@@ -47,6 +47,8 @@ const loginLogClear  = $('login-log-clear');
 
 const notebookSelect         = $('notebook-select');
 const btnRefresh             = $('btn-refresh-notebooks');
+const exportDirectory        = $('export-directory');
+const btnSelectDirectory     = $('btn-select-directory');
 const exportNotheadless      = $('export-notheadless');
 const exportNopassasked      = $('export-nopassasked');
 const exportTimeoutSelect    = $('export-timeout');
@@ -346,6 +348,14 @@ async function loadNotebooks() {
 
 btnRefresh.addEventListener('click', loadNotebooks);
 
+btnSelectDirectory.addEventListener('click', async () => {
+    const current = exportDirectory.value;
+    const selected = await window.electronAPI.invoke('select-directory', current);
+    if (selected) {
+        exportDirectory.value = selected;
+    }
+});
+
 // ─── Export ───────────────────────────────────────────────────────────────
 
 btnExport.addEventListener('click', async () => {
@@ -369,6 +379,7 @@ btnExport.addEventListener('click', async () => {
 
     await window.electronAPI.invoke('start-export', {
         notebook,
+        exportDir: exportDirectory.value,
         notheadless: exportNotheadless.checked,
         nopassasked: exportNopassasked.checked,
         downloadTimeout: parseInt(exportTimeoutSelect.value, 10) || 60000
@@ -396,4 +407,12 @@ function escapeAttr(str) {
 // ─── Init ─────────────────────────────────────────────────────────────────
 
 checkAuthStatus();
+
+async function initExportDir() {
+    if (exportDirectory) {
+        exportDirectory.value = await window.electronAPI.invoke('get-default-directory');
+    }
+}
+initExportDir();
+
 appendLog(loginLog, 'info', 'OneNote Exporter ready. Login to get started.');

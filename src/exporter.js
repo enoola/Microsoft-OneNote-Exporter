@@ -384,7 +384,8 @@ async function runExport(options = {}) {
                 contentFrame = session.page;
             }
 
-            const outputBase = path.resolve(__dirname, '../output', sanitize(selectedNotebook.name));
+            const baseDir = options.exportDir || path.resolve(__dirname, '../output');
+            const outputBase = path.resolve(baseDir, sanitize(selectedNotebook.name));
             await fs.ensureDir(outputBase);
             const td = createMarkdownConverter();
 
@@ -659,7 +660,8 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
             contentFrame = session.page;
         }
 
-        const outputBase = path.resolve(__dirname, '../output', sanitize(selectedNotebook.name));
+        const baseDir = options.exportDir || path.resolve(__dirname, '../output');
+        const outputBase = path.resolve(baseDir, sanitize(selectedNotebook.name));
         await fs.ensureDir(outputBase);
         const td = createMarkdownConverter();
 
