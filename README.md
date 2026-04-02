@@ -1,6 +1,6 @@
 # OneNote to Obsidian Exporter
 
-![App Icon](build/icon.png)
+![App Icon](docs/MSOneNoteExporter_Icon_Adobe.svg)
 
 A robust, automated tool to export Microsoft OneNote notebooks into Obsidian-compatible Markdown folders. This tool preserves your notebook's hierarchy, downloads all attachments (PDFs, images, videos), and correctly resolves internal links.
 
@@ -78,6 +78,7 @@ node src/index.js login --login "your-email@example.com" --password "your-passwo
 
 > [!TIP]
 > **MFA Support**: The tool includes an advanced "Resilient MFA" handler. While some accounts may still require a one-time manual `login` in visible mode, the automated `login --login email --password pass` command now supports many MFA flows (like switching to password entry or "Stay signed in" prompts) automatically.
+
 
 ### 2. Interactive Export
 List available notebooks and select one to export.

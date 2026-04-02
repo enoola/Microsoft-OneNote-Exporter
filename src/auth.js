@@ -120,6 +120,13 @@ async function login(credentials = {}) {
                 throw e;
             }
 
+            // Proactive dump after email step (before MFA detection)
+            if (credentials.dodump) {
+                const debugFile = 'debug_after_email.html';
+                await fs.writeFile(debugFile, await page.content());
+                logger.debug(`[dodump] Post-email state dumped to ${debugFile}`);
+            }
+
             // 1.5. Handle intermediate screens (MFA selection, "Other ways to sign in")
             try {
                 // Re-poll the page state after the stabilization delay
@@ -151,6 +158,13 @@ async function login(credentials = {}) {
                 });
 
                 logger.debug(`Intermediate screen detection result: ${result}`);
+
+                // Proactive dump when intermediate screen is reached
+                if (credentials.dodump) {
+                    const debugFile = 'debug_intermediate_screen.html';
+                    await fs.writeFile(debugFile, await page.content());
+                    logger.debug(`[dodump] Intermediate screen state dumped to ${debugFile}`);
+                }
 
                 if (result === 'other_ways' || pageHeading.includes('Get a code') || pageHeading.includes('Verify your identity')) {
                     logger.info('Detected MFA/Verification screen. Attempting to locate "Other ways to sign in"...');
@@ -277,16 +291,65 @@ async function login(credentials = {}) {
                 throw e;
             }
 
+            // Proactive dump after password submission (before post-password MFA check)
+            if (credentials.dodump) {
+                const debugFile = 'debug_after_password.html';
+                await fs.writeFile(debugFile, await page.content());
+                logger.debug(`[dodump] Post-password state dumped to ${debugFile}`);
+            }
+
             // 2.5. Handle post-password MFA/Verification if needed
             try {
                 // Check if we are stuck on a verification screen
+                // Includes new Number Matching MFA ("Approve sign in request" with a displayed number)
                 const verificationScreen = await Promise.race([
-                    page.waitForSelector('text="Verify your identity"', { timeout: 5000 }).then(() => 'verify'),
-                    page.waitForSelector('text="Enter code"', { timeout: 5000 }).then(() => 'enter_code'),
-                    page.waitForSelector('input[name="otc"]', { timeout: 5000 }).then(() => 'otc_input')
+                    page.waitForSelector('text="Verify your identity"', { timeout: 10000 }).then(() => 'verify'),
+                    page.waitForSelector('text="Enter code"', { timeout: 10000 }).then(() => 'enter_code'),
+                    page.waitForSelector('input[name="otc"]', { timeout: 10000 }).then(() => 'otc_input'),
+                    // Number Matching MFA: corporate accounts show a number the user must enter in Authenticator
+                    page.waitForSelector('text=/Approve sign in request/i', { timeout: 10000 }).then(() => 'number_match'),
+                    page.waitForSelector('.displaySign', { timeout: 10000 }).then(() => 'number_match'),
                 ]).catch(() => null);
 
-                if (verificationScreen) {
+                if (credentials.dodump) {
+                    const debugFile = 'debug_post_password_mfa.html';
+                    await fs.writeFile(debugFile, await page.content());
+                    logger.debug(`[dodump] Post-password MFA screen state dumped to ${debugFile}`);
+                }
+
+                if (verificationScreen === 'number_match') {
+                    // ── Number Matching MFA (corporate accounts) ──────────────────────────
+                    // Microsoft shows a 2-digit number; user must enter it in Authenticator
+                    // app on their phone and tap OK — the page then auto-advances.
+                    // No browser interaction is required after extracting the number.
+                    logger.warn('Number Matching MFA detected ("Approve sign in request" screen).');
+
+                    let matchNumber = '??';
+                    try {
+                        matchNumber = await page.$eval('.displaySign', el => el.textContent.trim());
+                    } catch (_) {
+                        logger.debug('Could not extract number from .displaySign — user may still see it if --notheadless is used.');
+                    }
+
+                    logger.step('══════════════════════════════════════════════════════');
+                    logger.step(`  ACTION REQUIRED: Open Microsoft Authenticator on your phone.`);
+                    logger.step(`  Enter the number:  ${matchNumber}`);
+                    logger.step(`  Then tap "Yes" / "Approve" in the app.`);
+                    logger.step('══════════════════════════════════════════════════════');
+                    logger.info('Waiting for phone approval (up to 120 seconds)...');
+
+                    // Wait for the page to auto-advance after phone approval.
+                    // The MFA page disappears and Microsoft redirects to the next step.
+                    await Promise.race([
+                        page.waitForSelector('.displaySign', { state: 'hidden', timeout: 120000 }),
+                        page.waitForURL(url => !url.toString().includes('login.microsoftonline.com'), { timeout: 120000 }),
+                        page.waitForSelector('text=/Stay signed in/i', { timeout: 120000 }),
+                    ]);
+
+                    logger.success('Phone approval received. Continuing login flow...');
+
+                } else if (verificationScreen) {
+                    // ── OTC / TOTP code (email / authenticator code) ──────────────────────
                     logger.warn('MFA/Verification screen detected.');
                     logger.step('A verification code is required. Please check your email or authenticator app.');
 
@@ -512,6 +575,13 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 throw e;
             }
 
+            // Proactive dump after email step (before MFA detection)
+            if (credentials.dodump) {
+                const debugFile = 'debug_after_email.html';
+                await fs.writeFile(debugFile, await page.content());
+                log('debug', `[dodump] Post-email state dumped to ${debugFile}`);
+            }
+
             // 1.5. Handle intermediate screens (MFA selection)
             try {
                 const pageTitle = (await page.title()).trim();
@@ -536,6 +606,13 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 });
 
                 log('debug', `Intermediate screen detection result: ${result}`);
+
+                // Proactive dump when intermediate screen is reached
+                if (credentials.dodump) {
+                    const debugFile = 'debug_intermediate_screen.html';
+                    await fs.writeFile(debugFile, await page.content());
+                    log('debug', `[dodump] Intermediate screen state dumped to ${debugFile}`);
+                }
 
                 if (result === 'other_ways' || pageHeading.includes('Get a code') || pageHeading.includes('Verify your identity')) {
                     log('info', 'Detected MFA/Verification screen. Attempting to locate "Other ways to sign in"...');
@@ -609,15 +686,61 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 throw e;
             }
 
+            // Proactive dump after password submission (before post-password MFA check)
+            if (credentials.dodump) {
+                const debugFile = 'debug_after_password.html';
+                await fs.writeFile(debugFile, await page.content());
+                log('debug', `[dodump] Post-password state dumped to ${debugFile}`);
+            }
+
             // 2.5. Handle post-password MFA/Verification (OTC prompt via GUI dialog)
+            //      Also handles Number Matching MFA (corporate accounts)
             try {
                 const verificationScreen = await Promise.race([
-                    page.waitForSelector('text="Verify your identity"', { timeout: 5000 }).then(() => 'verify'),
-                    page.waitForSelector('text="Enter code"', { timeout: 5000 }).then(() => 'enter_code'),
-                    page.waitForSelector('input[name="otc"]', { timeout: 5000 }).then(() => 'otc_input')
+                    page.waitForSelector('text="Verify your identity"', { timeout: 10000 }).then(() => 'verify'),
+                    page.waitForSelector('text="Enter code"', { timeout: 10000 }).then(() => 'enter_code'),
+                    page.waitForSelector('input[name="otc"]', { timeout: 10000 }).then(() => 'otc_input'),
+                    // Number Matching MFA: corporate accounts show a number to enter in Authenticator
+                    page.waitForSelector('text=/Approve sign in request/i', { timeout: 10000 }).then(() => 'number_match'),
+                    page.waitForSelector('.displaySign', { timeout: 10000 }).then(() => 'number_match'),
                 ]).catch(() => null);
 
-                if (verificationScreen) {
+                if (credentials.dodump) {
+                    const debugFile = 'debug_post_password_mfa.html';
+                    await fs.writeFile(debugFile, await page.content());
+                    log('debug', `[dodump] Post-password MFA screen state dumped to ${debugFile}`);
+                }
+
+                if (verificationScreen === 'number_match') {
+                    // ── Number Matching MFA (corporate accounts) ──────────────────────────
+                    // Microsoft shows a 2-digit number; user must enter it in Authenticator
+                    // on their phone and tap OK — the page then auto-advances.
+                    log('warn', 'Number Matching MFA detected ("Approve sign in request" screen).');
+
+                    let matchNumber = '??';
+                    try {
+                        matchNumber = await page.$eval('.displaySign', el => el.textContent.trim());
+                    } catch (_) {
+                        log('debug', 'Could not extract number from .displaySign.');
+                    }
+
+                    // Notify the Electron renderer — it will show a waiting popup to the user
+                    sendEvent('mfa-number-match', { number: matchNumber });
+                    log('warn', `Number Matching MFA — user must enter ${matchNumber} in Microsoft Authenticator.`);
+
+                    // Wait silently for phone approval to auto-advance the page (no browser action needed)
+                    log('info', 'Waiting for phone approval (up to 120 seconds)...');
+                    await Promise.race([
+                        page.waitForSelector('.displaySign', { state: 'hidden', timeout: 120000 }),
+                        page.waitForURL(url => !url.toString().includes('login.microsoftonline.com'), { timeout: 120000 }),
+                        page.waitForSelector('text=/Stay signed in/i', { timeout: 120000 }),
+                    ]);
+
+                    log('success', 'Phone approval received. Continuing login flow...');
+                    sendEvent('mfa-number-match-approved', {});
+
+                } else if (verificationScreen) {
+                    // ── OTC / TOTP code prompt ─────────────────────────────────────────────
                     log('warn', 'MFA/Verification screen detected.');
                     log('step', 'A verification code is required. Please check your email or authenticator app.');
 
