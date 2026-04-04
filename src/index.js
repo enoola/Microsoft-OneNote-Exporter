@@ -27,9 +27,16 @@ program
     .action(async () => {
         const isAuth = await checkAuth();
         if (isAuth) {
-            logger.success('Authentication file found.');
+            logger.success('Authentication file found. You are authenticated.');
+            const { getAuthMeta } = require('./auth');
+            const meta = await getAuthMeta();
+            if (meta && meta.email) {
+                const loginTime = new Date(meta.loginTime).toLocaleString();
+                logger.info(`Logged in as: ${meta.email}`);
+                logger.debug(`Session started at: ${loginTime}`);
+            }
         } else {
-            logger.error('Authentication file NOT found. Run "login" first.');
+            logger.error('Authentication file NOT found or invalid. Run "login" first.');
         }
     });
 

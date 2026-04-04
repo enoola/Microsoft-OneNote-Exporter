@@ -446,6 +446,13 @@ async function login(credentials = {}) {
 
         logger.info('Saving authentication state...');
         await context.storageState({ path: AUTH_FILE });
+        
+        // Persist email + time so that check command can show the logged-in user
+        await fs.writeJson(AUTH_META_FILE, {
+            email: email || 'manual login',
+            loginTime: new Date().toISOString()
+        });
+        
         logger.success(`Authentication successful! State saved to ${AUTH_FILE}`);
     } catch (error) {
         logger.error('Authentication failed or cancelled:', error);
