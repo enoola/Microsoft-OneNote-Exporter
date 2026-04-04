@@ -184,7 +184,77 @@ async function openNotebook(page, scrapeTarget, notebookId) {
     }
 }
 
+/**
+ * Opens a notebook directly by navigating to its full URL.
+ * Returns a session object identical to the one returned by listNotebooks({ keepOpen: true }).
+ *
+ * @param {object} options  - { notheadless, dodump, notebookLink, ... }
+ * @returns {{ browser, page, scrapeTarget, notebookName }}
+ */
+async function openNotebookByLink(options = {}) {
+    const url = options.notebookLink;
+    if (!url) throw new Error('openNotebookByLink: options.notebookLink is required');
+
+    logger.info(`Opening notebook directly via link: ${url}`);
+
+    const headless = !options.notheadless;
+    logger.debug(`Launching browser (headless: ${headless})...`);
+
+    const browser = await chromium.launch({ headless });
+    try {
+        const context = await getAuthenticatedContext(browser);
+        const page = await context.newPage();
+
+        logger.info('Navigating to notebook URL...');
+        await page.goto(url);
+
+        try {
+            await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+        } catch (e) {
+            logger.warn('Page load timeout, proceeding anyway...');
+        }
+
+        logger.info('Waiting for page to fully settle after redirects...');
+        try {
+            await page.waitForLoadState('networkidle', { timeout: 45000 });
+        } catch (e) {
+            logger.warn('Network idle timeout — continuing anyway...');
+        }
+
+        // Extra grace period for SPA JS rendering
+        logger.info('Waiting 5 seconds for dynamic content to render...');
+        await page.waitForTimeout(5000);
+
+        if (options.dodump) {
+            logger.warn('Dumping page content to debug_notebook_link.html...');
+            const content = await page.content();
+            await fs.writeFile(path.resolve(__dirname, '../debug_notebook_link.html'), content);
+        }
+
+        // Try to extract the notebook name from the page title or URL
+        let notebookName = 'Notebook';
+        try {
+            const title = await page.title();
+            if (title && title.trim()) {
+                // OneNote page titles are usually "Notebook Name - Microsoft OneNote"
+                notebookName = title.replace(/ ?[-–|] ?Microsoft OneNote.*$/i, '').trim() || notebookName;
+            }
+        } catch (e) {
+            logger.warn('Could not read page title, using default name.');
+        }
+
+        logger.success(`Notebook opened (name detected: "${notebookName}")`);
+
+        return { browser, page, scrapeTarget: page, notebookName };
+    } catch (e) {
+        logger.error('Failed to open notebook by link:', e);
+        await browser.close();
+        throw e;
+    }
+}
+
 module.exports = {
     listNotebooks,
-    openNotebook
+    openNotebook,
+    openNotebookByLink
 };

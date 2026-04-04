@@ -1,6 +1,6 @@
 const { Select } = require('enquirer');
 const logger = require('./utils/logger');
-const { listNotebooks, openNotebook } = require('./navigator');
+const { listNotebooks, openNotebook, openNotebookByLink } = require('./navigator');
 const { getSections, getPages, selectSection, selectPage, getPageContent, navigateBack, isSectionLocked } = require('./scrapers');
 const { createMarkdownConverter } = require('./parser');
 const { resolveInternalLinks } = require('./linkResolver');
@@ -317,6 +317,67 @@ async function runExport(options = {}) {
     let session;
 
     try {
+        // ── Fast path: --notebook-link skips the listing entirely ────────────
+        if (options.notebookLink) {
+            logger.info('Notebook link provided — skipping notebook listing.');
+            session = await openNotebookByLink(options);
+
+            const notebookName = session.notebookName || 'Notebook';
+            logger.info(`Exporting notebook: ${notebookName}`);
+
+            logger.info('Looking for OneNote content frame...');
+            await session.page.waitForTimeout(10000);
+
+            const frames = session.page.frames();
+            let contentFrame = null;
+            for (const f of frames) {
+                try {
+                    const hasSections = await f.$('.sectionList');
+                    if (hasSections) {
+                        contentFrame = f;
+                        logger.success(`Found content frame (navigation): ${f.url()}`);
+                        if (options.dodump) {
+                            logger.warn('Dumping content frame HTML to debug_notebook_content.html...');
+                            const frameContent = await f.content();
+                            await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
+                        }
+                        break;
+                    }
+                } catch (e) {}
+            }
+
+            if (!contentFrame) {
+                logger.warn('Could not auto-detect content frame. Using main page as fallback...');
+                contentFrame = session.page;
+            }
+
+            const baseDir = options.exportDir || path.resolve(__dirname, '../output');
+            const outputBase = path.resolve(baseDir, require('sanitize-filename')(notebookName));
+            await fs.ensureDir(outputBase);
+            const td = createMarkdownConverter();
+
+            logger.info('Scanning sections...');
+            try {
+                await contentFrame.waitForSelector('.sectionList', { timeout: 10000 });
+            } catch (e) {
+                logger.warn('Timeout waiting for .sectionList, trying to scrape anyway...');
+            }
+
+            const pageIdMap = {};
+            const stats = { totalPages: 0, totalAssets: 0 };
+            await processSections(contentFrame, outputBase, td, options, pageIdMap, new Set(), null, stats);
+
+            logger.info('Resolving internal links...');
+            await resolveInternalLinks(pageIdMap, outputBase);
+
+            logger.success('Export complete!');
+            logger.info(`Total Pages: ${stats.totalPages}`);
+            logger.info(`Total Assets: ${stats.totalAssets}`);
+            logger.info(`Files saved in: ${outputBase}`);
+            return;
+        }
+        // ────────────────────────────────────────────────────────────────────
+
         logger.info('Fetching notebooks...');
         session = await listNotebooks({ ...options, keepOpen: true });
 

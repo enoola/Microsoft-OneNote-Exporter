@@ -61,6 +61,7 @@ program
     .option('--dodump', 'Dump HTML content to files for debugging')
     .option('--nopassasked', 'Skip password-protected sections instead of asking')
     .option('--notebook <name>', 'Preselect notebook by name (skips interactive selection)')
+    .option('--notebook-link <url>', 'Directly export a notebook by its full OneNote URL (skips listing)')
     .action(async (options) => {
         await runExport(options);
     });
