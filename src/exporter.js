@@ -384,7 +384,8 @@ async function runExport(options = {}) {
         const { notebooks } = session;
 
         if (notebooks.length === 0) {
-            logger.warn('No notebooks found. Exiting.');
+            logger.warn('No notebook have been found.');
+            logger.warn('Remember: you can export a notebook by using the export command with the --notebook-link <url> option.');
             return;
         }
 
@@ -682,7 +683,8 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
         const { notebooks } = session;
 
         if (notebooks.length === 0) {
-            log('warn', 'No notebooks found. Exiting.');
+            log('warn', 'No notebook have been found.');
+            log('warn', 'Remember: you can export a notebook by using the export command with the --notebook-link <url> option.');
             return { success: false, error: 'No notebooks found.' };
         }
 

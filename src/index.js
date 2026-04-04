@@ -43,8 +43,8 @@ program
             const notebooks = await listNotebooks(options);
             logger.step('\nAvailable Notebooks:');
             if (notebooks.length === 0) {
-                logger.warn('No notebooks found or selector failed.');
-                logger.debug('Try running with --notheadless to see what the scraper sees.');
+                logger.warn('No notebook have been found.');
+                logger.warn('Remember: you can export a notebook by using the export command with the --notebook-link <url> option.');
             }
             notebooks.forEach((nb, index) => {
                 logger.info(`${index + 1}. ${nb.name} (${nb.url})`);

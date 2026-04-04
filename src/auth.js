@@ -411,7 +411,7 @@ async function login(credentials = {}) {
 
                 // Wait for either the URL pattern or a success indicator in the DOM
                 await Promise.any([
-                    page.waitForURL(url => url.toString().includes('/notebooks'), { timeout: 60000 }),
+                    page.waitForURL(url => url.toString().includes('/notebooks') || url.hostname.includes('onenote.cloud.microsoft') || url.hostname.includes('onenote.com'), { timeout: 60000 }),
                     page.waitForSelector('text="My notebooks"', { state: 'visible', timeout: 60000 }),
                     page.waitForSelector('text="Create new notebook"', { state: 'visible', timeout: 60000 }),
                     page.waitForSelector('text="Welcome, "', { state: 'visible', timeout: 60000 })
@@ -783,7 +783,7 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
             try {
                 log('info', 'Waiting for redirection to notebooks list...');
                 await Promise.any([
-                    page.waitForURL(url => url.toString().includes('/notebooks'), { timeout: 60000 }),
+                    page.waitForURL(url => url.toString().includes('/notebooks') || url.hostname.includes('onenote.cloud.microsoft') || url.hostname.includes('onenote.com'), { timeout: 60000 }),
                     page.waitForSelector('text="My notebooks"', { state: 'visible', timeout: 60000 }),
                     page.waitForSelector('text="Create new notebook"', { state: 'visible', timeout: 60000 }),
                     page.waitForSelector('text="Welcome, "', { state: 'visible', timeout: 60000 })
