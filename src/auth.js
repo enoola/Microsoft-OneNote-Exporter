@@ -114,7 +114,7 @@ async function login(credentials = {}) {
                 logger.error(`Failed to enter email: ${e.message}`);
                 if (credentials.dodump) {
                     const debugFile = 'debug_login_error_email.html';
-                    await fs.writeFile(debugFile, await page.content());
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                     logger.error(`Email submission failed. HTML dumped to ${debugFile}`);
                 }
                 throw e;
@@ -123,7 +123,7 @@ async function login(credentials = {}) {
             // Proactive dump after email step (before MFA detection)
             if (credentials.dodump) {
                 const debugFile = 'debug_after_email.html';
-                await fs.writeFile(debugFile, await page.content());
+                await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                 logger.debug(`[dodump] Post-email state dumped to ${debugFile}`);
             }
 
@@ -162,7 +162,7 @@ async function login(credentials = {}) {
                 // Proactive dump when intermediate screen is reached
                 if (credentials.dodump) {
                     const debugFile = 'debug_intermediate_screen.html';
-                    await fs.writeFile(debugFile, await page.content());
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                     logger.debug(`[dodump] Intermediate screen state dumped to ${debugFile}`);
                 }
 
@@ -285,7 +285,7 @@ async function login(credentials = {}) {
             } catch (e) {
                 if (credentials.dodump) {
                     const debugFile = 'debug_login_error_password.html';
-                    await fs.writeFile(debugFile, await page.content());
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                     logger.error(`Password entry failed. HTML dumped to ${debugFile}`);
                 }
                 throw e;
@@ -294,7 +294,7 @@ async function login(credentials = {}) {
             // Proactive dump after password submission (before post-password MFA check)
             if (credentials.dodump) {
                 const debugFile = 'debug_after_password.html';
-                await fs.writeFile(debugFile, await page.content());
+                await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                 logger.debug(`[dodump] Post-password state dumped to ${debugFile}`);
             }
 
@@ -313,7 +313,7 @@ async function login(credentials = {}) {
 
                 if (credentials.dodump) {
                     const debugFile = 'debug_post_password_mfa.html';
-                    await fs.writeFile(debugFile, await page.content());
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                     logger.debug(`[dodump] Post-password MFA screen state dumped to ${debugFile}`);
                 }
 
@@ -421,7 +421,7 @@ async function login(credentials = {}) {
             } catch (e) {
                 if (credentials.dodump) {
                     const debugFile = 'debug_login_error_notebooks.html';
-                    await fs.writeFile(debugFile, await page.content());
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                     logger.error(`Success detection failed. HTML dumped to ${debugFile}`);
                 }
                 throw e;
@@ -578,7 +578,7 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
             // Proactive dump after email step (before MFA detection)
             if (credentials.dodump) {
                 const debugFile = 'debug_after_email.html';
-                await fs.writeFile(debugFile, await page.content());
+                await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                 log('debug', `[dodump] Post-email state dumped to ${debugFile}`);
             }
 
@@ -610,7 +610,7 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 // Proactive dump when intermediate screen is reached
                 if (credentials.dodump) {
                     const debugFile = 'debug_intermediate_screen.html';
-                    await fs.writeFile(debugFile, await page.content());
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                     log('debug', `[dodump] Intermediate screen state dumped to ${debugFile}`);
                 }
 
@@ -689,7 +689,7 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
             // Proactive dump after password submission (before post-password MFA check)
             if (credentials.dodump) {
                 const debugFile = 'debug_after_password.html';
-                await fs.writeFile(debugFile, await page.content());
+                await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                 log('debug', `[dodump] Post-password state dumped to ${debugFile}`);
             }
 
@@ -707,7 +707,7 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
 
                 if (credentials.dodump) {
                     const debugFile = 'debug_post_password_mfa.html';
-                    await fs.writeFile(debugFile, await page.content());
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
                     log('debug', `[dodump] Post-password MFA screen state dumped to ${debugFile}`);
                 }
 
