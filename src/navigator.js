@@ -5,6 +5,72 @@ const { ONENOTE_URL } = require('./config');
 const fs = require('fs-extra');
 const path = require('path');
 
+/**
+ * Detects the Microsoft Defender / MCAS "Use Edge Browser" interstitial
+ * (URL pattern: *.access.mcas.ms/aad_login) and dismisses it by:
+ *  1. Checking "Hide this notification for all apps for one week"
+ *  2. Clicking "Continue in current browser"
+ *
+ * Safe to call even when the page is NOT the MCAS interstitial — it will
+ * simply return false immediately.
+ *
+ * @param {import('playwright').Page} page
+ * @returns {Promise<boolean>} true if the interstitial was detected and dismissed
+ */
+async function dismissMcasInterstitial(page) {
+    const url = page.url();
+    if (!url.includes('access.mcas.ms')) {
+        return false;
+    }
+
+    logger.warn('Detected Microsoft Defender MCAS interstitial — dismissing...');
+
+    try {
+        // Wait for the MCAS form to be fully rendered (up to 10 s)
+        await page.waitForSelector('#skip-disclaimer-checkbox', { timeout: 10000 }).catch(() => {});
+
+        // Check the "Hide this notification for all apps for one week" checkbox
+        // Actual element: <input type="checkbox" id="skip-disclaimer-checkbox">
+        const checkbox = await page.$('#skip-disclaimer-checkbox');
+        if (checkbox) {
+            const isChecked = await checkbox.isChecked();
+            if (!isChecked) {
+                await checkbox.check();
+                logger.debug('MCAS: checked "Hide this notification for all apps for one week".');
+            }
+        } else {
+            logger.warn('MCAS: could not find the "Hide" checkbox.');
+        }
+
+        // Click "Continue in current browser"
+        // Actual element: <input type="submit" id="hiddenformSubmitBtn" value="Continue in current browser">
+        // (NOT an <a> tag — it is a submit button inside a form)
+        const continueBtn = await page.$('#hiddenformSubmitBtn');
+        if (continueBtn) {
+            logger.debug('MCAS: clicking "Continue in current browser"...');
+            await Promise.all([
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+                continueBtn.click()
+            ]);
+            logger.success('MCAS interstitial dismissed.');
+
+            // Wait for page to fully settle after the redirect
+            try {
+                await page.waitForLoadState('networkidle', { timeout: 45000 });
+            } catch (e) {
+                logger.warn('MCAS post-dismiss network idle timeout — continuing anyway...');
+            }
+            return true;
+        } else {
+            logger.warn('MCAS: could not find "Continue in current browser" submit button.');
+        }
+    } catch (e) {
+        logger.warn(`MCAS interstitial dismissal failed: ${e.message}`);
+    }
+
+    return false;
+}
+
 async function listNotebooks(options = {}) {
     logger.info('Connecting to OneNote...');
 
@@ -36,6 +102,9 @@ async function listNotebooks(options = {}) {
         } catch (e) {
             logger.warn('Network idle timeout — continuing anyway...');
         }
+
+        // Dismiss MCAS "Use Edge Browser" interstitial if present
+        await dismissMcasInterstitial(page);
 
         // Extra grace period for SPA JS rendering
         logger.info('Waiting 5 seconds for dynamic content to render...');
@@ -220,6 +289,9 @@ async function openNotebookByLink(options = {}) {
         } catch (e) {
             logger.warn('Network idle timeout — continuing anyway...');
         }
+
+        // Dismiss MCAS "Use Edge Browser" interstitial if present
+        await dismissMcasInterstitial(page);
 
         // Extra grace period for SPA JS rendering
         logger.info('Waiting 5 seconds for dynamic content to render...');

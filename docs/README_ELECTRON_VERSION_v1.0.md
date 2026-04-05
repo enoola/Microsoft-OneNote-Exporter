@@ -12,19 +12,19 @@ The OneNote Exporter now ships in two modes:
 
 | File | Purpose |
 |------|---------|
-| [electron/main.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/main.js) | Electron main process — BrowserWindow, IPC handlers, app lifecycle |
-| [electron/preload.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/preload.js) | `contextBridge` bridge (secure IPC to renderer) |
-| [electron/renderer/index.html](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/index.html) | Single-page dark-mode UI |
-| [electron/renderer/styles.css](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/styles.css) | Premium CSS — dark `#0f0f13` bg, `#7c6af7` accent, glassmorphism cards |
-| [electron/renderer/renderer.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/renderer.js) | UI logic: view switching, form handling, streaming event display |
+| [electron/main.js](electron/main.js) | Electron main process — BrowserWindow, IPC handlers, app lifecycle |
+| [electron/preload.js](electron/preload.js) | `contextBridge` bridge (secure IPC to renderer) |
+| [electron/renderer/index.html](electron/renderer/index.html) | Single-page dark-mode UI |
+| [electron/renderer/styles.css](electron/renderer/styles.css) | Premium CSS — dark `#0f0f13` bg, `#7c6af7` accent, glassmorphism cards |
+| [electron/renderer/renderer.js](electron/renderer/renderer.js) | UI logic: view switching, form handling, streaming event display |
 
 ### Modified files
 
 | File | What changed |
 |------|-------------|
-| [src/auth.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js) | Added [loginForElectron(credentials, sendEvent, ipcMain)](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js#390-636) — identical flow to [login()](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js#21-377) but uses `sendEvent` callbacks and IPC round-trips instead of `readline`/`logger` |
-| [src/exporter.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js) | Added [runExportForElectron(options, sendEvent, ipcMain)](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js#417-683) — full export loop with progress events streamed to renderer |
-| [package.json](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/package.json) | Added `electron-builder` `build` config (appId, files, mac/win/linux targets), platform-specific build scripts |
+| [src/auth.js](src/auth.js) | Added [loginForElectron(credentials, sendEvent, ipcMain)](src/auth.js#390-636) — identical flow to [login()](src/auth.js#21-377) but uses `sendEvent` callbacks and IPC round-trips instead of `readline`/`logger` |
+| [src/exporter.js](src/exporter.js) | Added [runExportForElectron(options, sendEvent, ipcMain)](src/exporter.js#417-683) — full export loop with progress events streamed to renderer |
+| [package.json](package.json) | Added `electron-builder` `build` config (appId, files, mac/win/linux targets), platform-specific build scripts |
 
 ### IPC architecture
 

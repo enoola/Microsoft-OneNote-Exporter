@@ -8,47 +8,47 @@ Wrap the existing CLI in an Electron shell so everyday users get a clickable GUI
 
 ### Backend Adapters (`src/`)
 
-The existing [auth.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js) and [exporter.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js) use `readline` stdin prompts and the `logger` module for output — neither of which works inside Electron's main process.
+The existing [auth.js](src/auth.js) and [exporter.js](src/exporter.js) use `readline` stdin prompts and the `logger` module for output — neither of which works inside Electron's main process.
 The strategy is to **add** Electron-aware variants that accept a `sendEvent(type, payload)` callback; the original functions remain untouched.
 
-#### [MODIFY] [auth.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js)
+#### [MODIFY] [auth.js](src/auth.js)
 - Export a new `loginForElectron(credentials, sendEvent)` function.
 - Replaces `readline` OTC prompt with an IPC round-trip: emits `{ type: 'otc-required' }` → waits on a one-shot IPC reply from the renderer form.
 - Replaces `logger.*` calls with `sendEvent('log', { level, message })`.
 - The manual "press Enter" flow in non-automated path becomes `sendEvent('manual-login-ready')` + waiting for an IPC `'manual-login-confirmed'` from the GUI button.
 
-#### [MODIFY] [exporter.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js)
+#### [MODIFY] [exporter.js](src/exporter.js)
 - Export a new `runExportForElectron(options, sendEvent)` function.
 - Replaces all `logger.*` calls with `sendEvent('log', ...)`.
 - Emits `sendEvent('progress', { current, total, pageName })` each time a page is saved.
 - Emits `sendEvent('export-complete', { totalPages, totalAssets, outputDir })` on finish.
-- The [waitForEnter](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js#46-58) password-section unlock becomes a GUI dialog via IPC (emit `'section-locked'`, await `'section-unlocked'`).
+- The [waitForEnter](src/exporter.js#46-58) password-section unlock becomes a GUI dialog via IPC (emit `'section-locked'`, await `'section-unlocked'`).
 
-#### [MODIFY] [navigator.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/navigator.js)
-- Export a new `listNotebooksForElectron(sendEvent)` — thin wrapper that calls [listNotebooks({ keepOpen: true })](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/navigator.js#8-141) and forwards logger output via `sendEvent('log', ...)`.
+#### [MODIFY] [navigator.js](src/navigator.js)
+- Export a new `listNotebooksForElectron(sendEvent)` — thin wrapper that calls [listNotebooks({ keepOpen: true })](src/navigator.js#8-141) and forwards logger output via `sendEvent('log', ...)`.
 - No structural change needed since it already supports `keepOpen`.
 
 ---
 
 ### Electron Layer (`electron/`)
 
-#### [MODIFY] [main.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/main.js)
+#### [MODIFY] [main.js](electron/main.js)
 Full rewrite of the stub. Key responsibilities:
-- [createWindow()](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/main.js#8-21) → `BrowserWindow` 900×650, dark background, `preload.js`.
+- [createWindow()](electron/main.js#8-21) → `BrowserWindow` 900×650, dark background, `preload.js`.
 - `ipcMain.handle('start-login', ...)` → calls `loginForElectron`, streams events back via `webContents.send`.
 - `ipcMain.handle('start-list-notebooks', ...)` → calls `listNotebooksForElectron`, returns notebook array.
 - `ipcMain.handle('start-export', ...)` → calls `runExportForElectron`, streams progress events back.
-- `ipcMain.handle('check-auth', ...)` → calls [checkAuth()](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js#386-389).
+- `ipcMain.handle('check-auth', ...)` → calls [checkAuth()](src/auth.js#386-389).
 - Handles OTC / section-lock round-trips where the main process waits for a reply IPC from renderer.
 - `app.on('window-all-closed')` / `activate` lifecycle hooks.
 
-#### [NEW] [preload.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/preload.js)
+#### [NEW] [preload.js](electron/preload.js)
 `contextBridge.exposeInMainWorld('electronAPI', { ... })` exposing:
 - `invoke(channel, ...args)` → `ipcRenderer.invoke`
-- [on(channel, callback)](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/utils/logger.js#4-7) → `ipcRenderer.on` (returns unsubscribe fn)
+- [on(channel, callback)](src/utils/logger.js#4-7) → `ipcRenderer.on` (returns unsubscribe fn)
 - `send(channel, ...args)` → `ipcRenderer.send` (for OTC/unlock replies)
 
-#### [NEW] [renderer/index.html](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/index.html)
+#### [NEW] [renderer/index.html](electron/renderer/index.html)
 Premium dark-mode single-page UI:
 - **Header**: App name + status badge ("Not logged in" / "Logged in")
 - **Login Panel**: Email + Password inputs (optional, for automated login), Login button, manual-login instruction
@@ -56,15 +56,15 @@ Premium dark-mode single-page UI:
 - **Progress Panel**: Progress bar (%), log console (scrollable, coloured by level), Done/Error states
 - **OTC Dialog**: Modal overlay asking for verification code input
 
-#### [NEW] [renderer/styles.css](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/styles.css)
+#### [NEW] [renderer/styles.css](electron/renderer/styles.css)
 - Dark background (`#0f0f13`), glassmorphism cards, accent colour `#7c6af7` (purple-violet)
 - Google Font **Inter**
 - Smooth transitions for panel visibility, button hover, progress bar animation
 - Coloured console lines matching log level (info=blue, warn=yellow, error=red, success=green)
 
-#### [NEW] [renderer/renderer.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/renderer.js)
+#### [NEW] [renderer/renderer.js](electron/renderer/renderer.js)
 DOM wiring:
-- [checkAuth()](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js#386-389) on load → update status badge
+- [checkAuth()](src/auth.js#386-389) on load → update status badge
 - Login button → `invoke('start-login', credentials)` → listen for streamed log events → update status
 - After login success → `invoke('start-list-notebooks')` → populate notebook dropdown
 - Export button → `invoke('start-export', options)` → update progress bar and log console from streamed events
@@ -75,7 +75,7 @@ DOM wiring:
 
 ### Package Configuration
 
-#### [MODIFY] [package.json](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/package.json)
+#### [MODIFY] [package.json](package.json)
 - Add to `devDependencies`: `"electron": "^30.0.0"`, `"electron-builder": "^25.0.0"`
 - Add `build` config block for `electron-builder`:
   ```json

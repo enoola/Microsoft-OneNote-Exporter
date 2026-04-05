@@ -5,7 +5,7 @@ I have added a convenient way to clean up generated and unnecessary files from y
 ## Changes Made
 
 ### 1. New NPM Script
-I added a `clean` script to the [package.json](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/package.json) file.
+I added a `clean` script to the [package.json](package.json) file.
 
 ```json
 "clean": "rm -rf node_modules output .jest-cache .test-temp .tmp auth.json debug_*.html .DS_Store logs *.log dist build coverage"
@@ -24,9 +24,9 @@ This will automatically remove:
 - `node_modules/` (Dependencies - run `npm install` to restore)
 - `output/` (Exported notebooks)
 - `.jest-cache/`, `.test-temp/`, `.tmp/` (Caches and temporary files)
-- [auth.json](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/auth.json) (Saved session)
+- [auth.json](auth.json) (Saved session)
 - `debug_*.html` (Debug dumps)
-- [.DS_Store](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/.DS_Store) (macOS internal files)
+- [.DS_Store](.DS_Store) (macOS internal files)
 - `logs/` and `*.log` (Log files)
 - `dist/`, `build/`, `coverage/` (Output and test coverage)
 
@@ -39,7 +39,7 @@ rm -rf node_modules output .jest-cache .test-temp .tmp auth.json debug_*.html .D
 
 ## Verification
 
-I have verified the [package.json](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/package.json) modification. Here is the updated scripts section:
+I have verified the [package.json](package.json) modification. Here is the updated scripts section:
 
 ```json
     "scripts": {
