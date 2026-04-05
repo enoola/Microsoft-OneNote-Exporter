@@ -520,6 +520,10 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                     log('info', `Entering group: ${item.name}`);
                     await selectSection(contentFrame, item.id);
                     await contentFrame.waitForTimeout(5000);
+                    if (options.dodump) {
+                        const dumpPath = path.resolve(__dirname, `../debug_group_${sanitize(item.name)}.html`);
+                        await fs.writeFile(dumpPath, await contentFrame.content());
+                    }
                     await processSectionsElectron(contentFrame, groupDir, td, pageIdMap, processedItems, item.id, stats);
                     log('info', `Returning from group: ${item.name}`);
                     await navigateBack(contentFrame);
@@ -590,6 +594,11 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                 try {
                     await selectPage(contentFrame, pageInfo.id);
                     await contentFrame.waitForTimeout(3000);
+
+                    if (options.dodump) {
+                        const pageDumpPath = path.resolve(__dirname, `../debug_page_${sanitize(pageInfo.name)}.html`);
+                        await fs.writeFile(pageDumpPath, await contentFrame.content());
+                    }
 
                     const content = await getPageContent(contentFrame);
                     let baseName = sanitize(pageInfo.name || 'Untitled');
@@ -695,6 +704,12 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                     if (hasSections) {
                         contentFrame = f;
                         log('success', `Found content frame: ${f.url()}`);
+
+                        if (options.dodump) {
+                            log('warn', 'Dumping content frame HTML to debug_notebook_content.html...');
+                            const frameContent = await f.content();
+                            await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
+                        }
                         break;
                     }
                 } catch (e) {}
@@ -764,6 +779,12 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                 if (hasSections) {
                     contentFrame = f;
                     log('success', `Found content frame: ${f.url()}`);
+
+                    if (options.dodump) {
+                        log('warn', 'Dumping content frame HTML to debug_notebook_content.html...');
+                        const frameContent = await f.content();
+                        await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
+                    }
                     break;
                 }
             } catch (e) {}
