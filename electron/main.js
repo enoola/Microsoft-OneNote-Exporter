@@ -126,7 +126,22 @@ ipcMain.handle('start-export', async (_event, options) => {
 
 // Open the output folder in Finder / Explorer
 ipcMain.handle('open-output-folder', async (_event, folderPath) => {
-    shell.openPath(folderPath);
+    if (!folderPath) {
+        return { success: false, error: 'No path provided' };
+    }
+    try {
+        const error = await shell.openPath(folderPath);
+        if (error) {
+            console.error(`[IPC] shell.openPath failed for: ${folderPath}. Error: ${error}`);
+            // Fallback: Reveal the folder instead of opening it
+            shell.showItemInFolder(folderPath);
+            return { success: false, error };
+        }
+        return { success: true };
+    } catch (e) {
+        console.error(`[IPC] Exception in open-output-folder: ${e.message}`);
+        return { success: false, error: e.message };
+    }
 });
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────

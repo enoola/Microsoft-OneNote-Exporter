@@ -432,8 +432,16 @@ btnExport.addEventListener('click', async () => {
 
 exportLogClear.addEventListener('click', () => { exportLog.innerHTML = ''; });
 
-btnOpenOutput.addEventListener('click', () => {
-    if (exportOutputDir) window.electronAPI.invoke('open-output-folder', exportOutputDir);
+btnOpenOutput.addEventListener('click', async () => {
+    if (!exportOutputDir) return;
+    try {
+        const result = await window.electronAPI.invoke('open-output-folder', exportOutputDir);
+        if (result && !result.success) {
+            appendLog(exportLog, 'warn', `Could not open folder directly: ${result.error || 'Unknown error'}. It might have been revealed instead.`);
+        }
+    } catch (e) {
+        appendLog(exportLog, 'error', `Failed to open folder: ${e.message}`);
+    }
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
