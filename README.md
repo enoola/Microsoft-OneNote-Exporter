@@ -96,6 +96,12 @@ node src/index.js export --notebook "My Notebook Name"
 
 # Export completely hands-free (skip password protected sections)
 node src/index.js export --notebook "My Notebook Name" --nopassasked
+
+# Export a specific notebook using its URL
+node src/index.js export --notebook-link 'https://...link.../to/.notebook'
+
+# Export a specific notebook using its URL, skip password protected sections and dump HTML files for debugging
+node src/index.js export --notebook-link 'https://...link...' --nopassasked --dodump
 ```
 
 ### 4. Debugging
