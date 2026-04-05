@@ -369,6 +369,23 @@ async function login(credentials = {}) {
             } catch (e) {
                 logger.debug(`Post-password verification handling skipped or failed: ${e.message}`);
             }
+            // 2.7. Handle "Help protect your account" interrupt screen
+            try {
+                // This screen may appear after password entry
+                const interruptPrompt = page.getByText(/Help protect your account/i).first();
+                if (await interruptPrompt.isVisible({ timeout: 5000 }) || page.url().includes('account.live.com/interrupt/')) {
+                    logger.info('Detected "Help protect your account" interrupt screen.');
+                    const skipButton = page.getByRole('button', { name: /Skip for now/i })
+                        .or(page.getByText(/Skip for now/i))
+                        .first();
+                    if (await skipButton.isVisible()) {
+                        logger.info('Clicking "Skip for now"...');
+                        await skipButton.click();
+                    }
+                }
+            } catch (e) {
+                logger.debug(`Help protect your account interrupt screen did not appear: ${e.message}`);
+            }
 
             // 3. Handle "Stay signed in?" prompt if it appears
             try {
@@ -768,6 +785,22 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 }
             } catch (e) {
                 log('debug', `Post-password verification handling skipped or failed: ${e.message}`);
+            }
+            // 2.7. Handle "Help protect your account" interrupt screen
+            try {
+                const interruptPrompt = page.getByText(/Help protect your account/i).first();
+                if (await interruptPrompt.isVisible({ timeout: 5000 }) || page.url().includes('account.live.com/interrupt/')) {
+                    log('info', 'Detected "Help protect your account" interrupt screen.');
+                    const skipButton = page.getByRole('button', { name: /Skip for now/i })
+                        .or(page.getByText(/Skip for now/i))
+                        .first();
+                    if (await skipButton.isVisible()) {
+                        log('info', 'Clicking "Skip for now"...');
+                        await skipButton.click();
+                    }
+                }
+            } catch (e) {
+                log('debug', `Help protect your account interrupt screen did not appear: ${e.message}`);
             }
 
             // 3. Handle "Stay signed in?" prompt
