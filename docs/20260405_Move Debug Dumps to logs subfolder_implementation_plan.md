@@ -13,15 +13,15 @@ Actually, `src/exporter.js`, `src/auth.js`, and `src/navigator.js` all use `fs-e
 
 ### [Component] Backend Logic
 
-#### [MODIFY] [src/exporter.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js)
+#### [MODIFY] [src/exporter.js](src/exporter.js)
 - Update all `dodump` blocks to use `path.resolve(__dirname, '../logs/debug_...')`.
 - Ensure the `logs/` directory exists before writing using `fs.ensureDir`.
 
-#### [MODIFY] [src/navigator.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/navigator.js)
+#### [MODIFY] [src/navigator.js](src/navigator.js)
 - Update all `dodump` blocks to use `path.resolve(__dirname, '../logs/debug_...')`.
 - Ensure the `logs/` directory exists before writing.
 
-#### [MODIFY] [src/auth.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js)
+#### [MODIFY] [src/auth.js](src/auth.js)
 - Import `path` module.
 - Update all `dodump` blocks to use `path.resolve(__dirname, '../logs/debug_...')`.
 - Ensure the `logs/` directory exists before writing.

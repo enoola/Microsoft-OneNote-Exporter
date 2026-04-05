@@ -112,11 +112,11 @@ async function listNotebooks(options = {}) {
 
         // Dump main page content if requested
         if (options.dodump) {
-            const logsDir = path.resolve(__dirname, '../logs');
-            await fs.ensureDir(logsDir);
-            logger.warn('Dumping main page content to logs/debug_page_dump.html...');
+            const dumpDir = await logger.getDumpDir();
+            const displayPath = logger.getDumpDisplayPath();
+            logger.warn(`Dumping main page content to ${displayPath}/debug_page_dump.html...`);
             const content = await page.content();
-            await fs.writeFile(path.join(logsDir, 'debug_page_dump.html'), content);
+            await fs.writeFile(path.join(dumpDir, 'debug_page_dump.html'), content);
         }
 
         // Try to locate the relevant iframe — wrap in try/catch in case the page
@@ -140,11 +140,11 @@ async function listNotebooks(options = {}) {
 
             if (frame) {
                 if (options.dodump) {
-                    const logsDir = path.resolve(__dirname, '../logs');
-                    await fs.ensureDir(logsDir);
-                    logger.warn('Dumping iframe content to logs/debug_frame_dump.html...');
+                    const dumpDir = await logger.getDumpDir();
+                    const displayPath = logger.getDumpDisplayPath();
+                    logger.warn(`Dumping iframe content to ${displayPath}/debug_frame_dump.html...`);
                     const frameContent = await frame.content();
-                    await fs.writeFile(path.join(logsDir, 'debug_frame_dump.html'), frameContent);
+                    await fs.writeFile(path.join(dumpDir, 'debug_frame_dump.html'), frameContent);
                 }
             } else {
                 logger.error('Could not get contentFrame() from element.');
@@ -302,11 +302,11 @@ async function openNotebookByLink(options = {}) {
         await page.waitForTimeout(5000);
 
         if (options.dodump) {
-            const logsDir = path.resolve(__dirname, '../logs');
-            await fs.ensureDir(logsDir);
-            logger.warn('Dumping page content to logs/debug_notebook_link.html...');
+            const dumpDir = await logger.getDumpDir();
+            const displayPath = logger.getDumpDisplayPath();
+            logger.warn(`Dumping page content to ${displayPath}/debug_notebook_link.html...`);
             const content = await page.content();
-            await fs.writeFile(path.join(logsDir, 'debug_notebook_link.html'), content);
+            await fs.writeFile(path.join(dumpDir, 'debug_notebook_link.html'), content);
         }
 
         // Try to extract the notebook name from the page title or URL

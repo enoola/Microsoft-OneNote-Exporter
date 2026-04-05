@@ -1,8 +1,21 @@
 const chalk = require('chalk');
+const fs = require('fs-extra');
+const path = require('path');
 
 class Logger {
     constructor() {
         this.months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        // Initialize dump directory name once per execution
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        
+        // Format: YYYY-MM-DD_HHhMM (as per user request "h" vs ":" and "no single digits")
+        this.dumpSubDir = `${yyyy}-${mm}-${dd}_${hh}h${min}`;
     }
 
     _getTimestamp() {
@@ -11,6 +24,25 @@ class Logger {
         const day = String(now.getDate()).padStart(2, '0');
         const time = now.toTimeString().split(' ')[0];
         return `[${month} ${day} ${time}]`;
+    }
+
+    /**
+     * Returns the absolute path to the current session's dump directory.
+     * Ensures the directory exists.
+     * @returns {Promise<string>}
+     */
+    async getDumpDir() {
+        const dumpDir = path.resolve(__dirname, '../../logs/dumps', this.dumpSubDir);
+        await fs.ensureDir(dumpDir);
+        return dumpDir;
+    }
+
+    /**
+     * Returns a user-friendly relative path for logging.
+     * @returns {string}
+     */
+    getDumpDisplayPath() {
+        return `logs/dumps/${this.dumpSubDir}`;
     }
 
     _formatMessage(level, message, colorFunc = (m) => m) {

@@ -5,9 +5,9 @@ I have successfully updated the backend logic to save all debug HTML dumps gener
 ## Changes Made
 
 ### Console & Electron Backend
-- **[src/exporter.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js)**: Updated all paths for group, page, and notebook content dumps to use the `logs/` directory.
-- **[src/navigator.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/navigator.js)**: Updated paths for notebook listing and frame dumps to use the `logs/` directory.
-- **[src/auth.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js)**: Added `path` dependency and updated all login-related debug dumps to save into the `logs/` directory.
+- **[src/exporter.js](src/exporter.js)**: Updated all paths for group, page, and notebook content dumps to use the `logs/` directory.
+- **[src/navigator.js](src/navigator.js)**: Updated paths for notebook listing and frame dumps to use the `logs/` directory.
+- **[src/auth.js](src/auth.js)**: Added `path` dependency and updated all login-related debug dumps to save into the `logs/` directory.
 
 ### Robustness
 - Added `fs.ensureDir` before every dump call to ensure the `logs/` directory exists even if it was manually deleted.
