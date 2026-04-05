@@ -5,7 +5,7 @@ I have implemented a fix to handle the Microsoft login interrupt screen that was
 ## Changes Made
 
 ### Authentication Module
-#### [MODIFY] [auth.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js)
+#### [MODIFY] [auth.js](src/auth.js)
 - Added a new interrupt handler (Step 2.7) in both `login` (CLI) and `loginForElectron` (Electron).
 - The handler detects the `account.live.com/interrupt/` URL and the "Help protect your account" text.
 - If detected, it automatically clicks the "Skip for now" button/link to allow the login flow to proceed to the next stage (usually the "Stay signed in?" prompt or the notebooks list).

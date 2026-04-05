@@ -59,8 +59,11 @@
                 <button class="nav-item active" data-view="login" id="nav-login">
                     <span class="nav-icon">🔑</span> Login
                 </button>
-                <button class="nav-item" data-view="export" id="nav-export" disabled>
-                    <span class="nav-icon">📤</span> Export
+                <button class="nav-item" data-view="export-list" id="nav-export-list" disabled>
+                    <span class="nav-icon">📚</span> Export from List
+                </button>
+                <button class="nav-item" data-view="export-url" id="nav-export-url" disabled>
+                    <span class="nav-icon">📕</span> Export from URL
                 </button>
             </nav>
 
@@ -144,15 +147,12 @@
             <!-- ── Export View ──────────────────────────────────────── -->
             <section class="view" id="view-export">
                 <div class="view-header">
-                    <h1>Export Notebook</h1>
-                    <p class="subtitle">Select a notebook and export it to Obsidian-compatible Markdown.</p>
+                    <h1 id="export-view-title">Export Notebook</h1>
+                    <p class="subtitle" id="export-view-subtitle">Select a notebook and export it to Obsidian-compatible Markdown.</p>
                 </div>
 
                 <div class="card" id="notebook-selection-card">
-                    <div class="card-tabs">
-                        <button class="tab-btn active" id="tab-list">Select from List</button>
-                        <button class="tab-btn" id="tab-link">Direct URL</button>
-                    </div>
+
 
                     <div id="section-list">
                         <div class="form-group">

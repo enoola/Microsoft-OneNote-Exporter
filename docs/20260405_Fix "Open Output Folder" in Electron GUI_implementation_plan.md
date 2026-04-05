@@ -11,7 +11,7 @@ The "Open Output Folder" button in the Electron GUI is currently non-functional.
 
 ### Electron Main Process
 
-#### [MODIFY] [main.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/main.js)
+#### [MODIFY] [main.js](electron/main.js)
 - Update the `open-output-folder` IPC handler:
     ```javascript
     ipcMain.handle('open-output-folder', async (_event, folderPath) => {
@@ -32,7 +32,7 @@ The "Open Output Folder" button in the Electron GUI is currently non-functional.
 
 ### Electron Renderer Process
 
-#### [MODIFY] [renderer.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/renderer.js)
+#### [MODIFY] [renderer.js](electron/renderer/renderer.js)
 - Update the click listener for `btnOpenOutput`:
     ```javascript
     btnOpenOutput.addEventListener('click', async () => {

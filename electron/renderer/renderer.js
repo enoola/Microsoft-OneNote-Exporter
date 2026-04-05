@@ -27,9 +27,12 @@ let exportMode = 'list'; // 'list' or 'link'
 const $ = (id) => document.getElementById(id);
 
 const navLogin       = $('nav-login');
-const navExport      = $('nav-export');
+const navExportList  = $('nav-export-list');
+const navExportUrl   = $('nav-export-url');
 const viewLogin      = $('view-login');
 const viewExport     = $('view-export');
+const viewExportTitle = $('export-view-title');
+const viewExportSub   = $('export-view-subtitle');
 const badgeDot       = $('badge-dot');
 const badgeLabel     = $('badge-label');
 const badgeUser      = $('badge-user');
@@ -48,8 +51,6 @@ const loginLogClear  = $('login-log-clear');
 
 const notebookSelect         = $('notebook-select');
 const btnRefresh             = $('btn-refresh-notebooks');
-const tabList                = $('tab-list');
-const tabLink                = $('tab-link');
 const sectionList            = $('section-list');
 const sectionLink            = $('section-link');
 const notebookLinkInput      = $('notebook-link');
@@ -127,7 +128,8 @@ function setAuthStatus(authenticated, checking = false, email = null, loginTime 
         badgeSince.textContent = '';
     }
 
-    navExport.disabled = !authenticated;
+    navExportList.disabled = !authenticated;
+    navExportUrl.disabled = !authenticated;
 
     // Update Login page UI
     btnLoginLabel.textContent = authenticated ? 'Login as a different user' : 'Login';
@@ -136,19 +138,43 @@ function setAuthStatus(authenticated, checking = false, email = null, loginTime 
 
 function switchView(name) {
     viewLogin.classList.toggle('active', name === 'login');
-    viewExport.classList.toggle('active', name === 'export');
+    viewExport.classList.toggle('active', name.startsWith('export'));
+    
     navLogin.classList.toggle('active', name === 'login');
-    navExport.classList.toggle('active', name === 'export');
+    navExportList.classList.toggle('active', name === 'export-list');
+    navExportUrl.classList.toggle('active', name === 'export-url');
+
+    if (name === 'export-list') {
+        exportMode = 'list';
+        viewExportTitle.textContent = 'Export from List';
+        viewExportSub.textContent = 'Select a notebook from your account and export it.';
+        sectionList.style.display = '';
+        sectionLink.style.display = 'none';
+        btnExport.disabled = !notebookSelect.value;
+    } else if (name === 'export-url') {
+        exportMode = 'link';
+        viewExportTitle.textContent = 'Export from URL';
+        viewExportSub.textContent = 'Provide a direct link to a notebook to export it.';
+        sectionList.style.display = 'none';
+        sectionLink.style.display = '';
+        btnExport.disabled = false;
+    }
 }
 
 // ─── Navigation ───────────────────────────────────────────────────────────
 
 navLogin.addEventListener('click', () => switchView('login'));
-navExport.addEventListener('click', () => {
-    if (!navExport.disabled) {
-        switchView('export');
-        // Only auto-load if not already loaded/loading
+
+navExportList.addEventListener('click', () => {
+    if (!navExportList.disabled) {
+        switchView('export-list');
         if (availableNotebooks.length === 0 && !_notebooksLoading) loadNotebooks();
+    }
+});
+
+navExportUrl.addEventListener('click', () => {
+    if (!navExportUrl.disabled) {
+        switchView('export-url');
     }
 });
 
@@ -234,8 +260,8 @@ async function doLogin(credentials) {
             appendLog(loginLog, 'success', 'Authentication successful!');
             // result.email and result.loginTime come from loginForElectron
             setAuthStatus(true, false, result.email || credentials?.login || null, result.loginTime);
-            // Automatically switch to export and load notebooks
-            switchView('export');
+            // Automatically switch to export-list and load notebooks
+            switchView('export-list');
             await loadNotebooks();
         } else {
             appendLog(loginLog, 'error', result?.error || 'Login failed. Check your credentials.');
@@ -354,25 +380,7 @@ async function loadNotebooks() {
 
 btnRefresh.addEventListener('click', loadNotebooks);
 
-tabList.addEventListener('click', () => {
-    exportMode = 'list';
-    tabList.classList.add('active');
-    tabLink.classList.remove('active');
-    sectionList.style.display = '';
-    sectionLink.style.display = 'none';
-    // Enable export button only if a notebook is available in the select
-    btnExport.disabled = !notebookSelect.value;
-});
 
-tabLink.addEventListener('click', () => {
-    exportMode = 'link';
-    tabLink.classList.add('active');
-    tabList.classList.remove('active');
-    sectionList.style.display = 'none';
-    sectionLink.style.display = '';
-    // Always enable when switching to Link mode (validation happens on click)
-    btnExport.disabled = false;
-});
 
 btnSelectDirectory.addEventListener('click', async () => {
     const current = exportDirectory.value;

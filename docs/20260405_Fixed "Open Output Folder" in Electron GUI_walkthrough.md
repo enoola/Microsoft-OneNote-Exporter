@@ -25,5 +25,5 @@ Since I cannot interact with the GUI directly, please verify the fix by:
 
 ---
 **Files Modified:**
-- [main.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/main.js)
-- [renderer.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/renderer.js)
+- [main.js](electron/main.js)
+- [renderer.js](electron/renderer/renderer.js)
