@@ -596,6 +596,11 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 }
             } catch (e) {
                 log('error', `Failed to enter email: ${e.message}`);
+                if (credentials.dodump) {
+                    const debugFile = 'debug_login_error_email.html';
+                    await fs.writeFile(debugFile, await page.content().catch(e => `<!-- Error: ${e.message} -->`));
+                    log('error', `Email submission failed. HTML dumped to ${debugFile}`);
+                }
                 throw e;
             }
 
@@ -707,6 +712,11 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                     throw new Error(`Login Error (Password): ${errorMsg?.trim()}`);
                 }
             } catch (e) {
+                if (credentials.dodump) {
+                    const debugFile = 'debug_login_error_password.html';
+                    await fs.writeFile(debugFile, await page.content().catch(err => `<!-- Error: ${err.message} -->`));
+                    log('error', `Password entry failed. HTML dumped to ${debugFile}`);
+                }
                 throw e;
             }
 
@@ -830,6 +840,11 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 ]);
                 log('success', 'Notebooks list detected.');
             } catch (e) {
+                if (credentials.dodump) {
+                    const debugFile = 'debug_login_error_notebooks.html';
+                    await fs.writeFile(debugFile, await page.content().catch(err => `<!-- Error: ${err.message} -->`));
+                    log('error', `Success detection failed. HTML dumped to ${debugFile}`);
+                }
                 throw e;
             }
         } else {

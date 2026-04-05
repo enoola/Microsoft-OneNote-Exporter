@@ -78,14 +78,14 @@ ipcMain.handle('start-login', async (_event, credentials) => {
 
 // List notebooks — mutex-protected so only one Playwright session runs at a time
 let _notebooksPromise = null;
-ipcMain.handle('list-notebooks', async () => {
+ipcMain.handle('list-notebooks', async (_event, options) => {
     // If a fetch is already in flight, reuse it instead of launching a second browser
     if (_notebooksPromise) {
         return _notebooksPromise;
     }
     _notebooksPromise = (async () => {
         try {
-            const notebooks = await listNotebooks({});
+            const notebooks = await listNotebooks(options || {});
             return { success: true, notebooks };
         } catch (e) {
             return { success: false, error: e.message, notebooks: [] };

@@ -67,6 +67,8 @@ const btnExport              = $('btn-export');
 const btnOpenOutput          = $('btn-open-output');
 const exportLog              = $('export-log');
 const exportLogClear         = $('export-log-clear');
+const loginDodump            = $('login-dodump');
+const exportDodump           = $('export-dodump');
 
 const otcModal    = $('otc-modal');
 const otcInput    = $('otc-input');
@@ -285,11 +287,11 @@ btnLogin.addEventListener('click', () => {
         appendLog(loginLog, 'warn', 'Please enter both email and password for automated login.');
         return;
     }
-    doLogin({ login: email, password, notheadless: notheadless.checked });
+    doLogin({ login: email, password, notheadless: notheadless.checked, dodump: loginDodump.checked });
 });
 
 btnManualLogin.addEventListener('click', () => {
-    doLogin({ notheadless: true }); // no credentials = manual flow
+    doLogin({ notheadless: true, dodump: loginDodump.checked }); // no credentials = manual flow
 });
 
 loginLogClear.addEventListener('click', () => { loginLog.innerHTML = ''; });
@@ -356,7 +358,9 @@ async function loadNotebooks() {
     appendLog(exportLog, 'info', 'Fetching notebook list…');
 
     try {
-        const { success, notebooks, error } = await window.electronAPI.invoke('list-notebooks');
+        const { success, notebooks, error } = await window.electronAPI.invoke('list-notebooks', { 
+            dodump: exportDodump.checked 
+        });
 
         if (success && notebooks.length > 0) {
             availableNotebooks = notebooks;
@@ -432,6 +436,7 @@ btnExport.addEventListener('click', async () => {
         exportDir: exportDirectory.value,
         notheadless: exportNotheadless.checked,
         nopassasked: exportNopassasked.checked,
+        dodump: exportDodump.checked,
         downloadTimeout: parseInt(exportTimeoutSelect.value, 10) || 60000
     });
 
