@@ -114,7 +114,7 @@ node src/index.js export --notheadless
 # Visible mode for login automation
 node src/index.js login --login "email" --password "pass" --notheadless
 
-# Dump HTML files for debugging if automation fails
+# Dump HTML files for debugging if automation fails (saved under logs/)
 node src/index.js login --login "email" --password "pass" --dodump
 node src/index.js export --dodump
 ```
@@ -123,7 +123,7 @@ node src/index.js export --dodump
 > **Headless Mode vs. Passwords**: By default, the tool runs in "headless" mode (invisible). Since you cannot interact with an invisible browser to unlock sections, the tool will **automatically skip** password-protected sections and act as if `--nopassasked` was set. To unlock sections manually, you **must** use the `--notheadless` flag.
 
 > [!WARNING]
-> The `--dodump` option saves the HTML content of every page and frame encountered to disk. For large notebooks, this can consume a significant amount of disk space and create thousands of files. Use it only for troubleshooting specific issues.
+> The `--dodump` option saves the HTML content of every page and frame encountered into a `logs/` subfolder at the project root. For large notebooks, this can consume a significant amount of disk space and create thousands of files. Use it only for troubleshooting specific issues.
 
 ## Maintenance & Cleanup
 
@@ -169,4 +169,6 @@ output/
       │       └── Page 2.md
       └── Section B/
           └── ...
+logs/
+  └── debug_*.html (optional, when --dodump is used)
 ```
