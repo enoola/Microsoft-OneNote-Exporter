@@ -89,7 +89,9 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                 await contentFrame.waitForTimeout(5000);
 
                 if (options.dodump) {
-                    const dumpPath = path.resolve(__dirname, `../debug_group_${sanitize(item.name)}.html`);
+                    const logsDir = path.resolve(__dirname, '../logs');
+                    await fs.ensureDir(logsDir);
+                    const dumpPath = path.join(logsDir, `debug_group_${sanitize(item.name)}.html`);
                     await fs.writeFile(dumpPath, await contentFrame.content());
                 }
                 await processSections(contentFrame, groupDir, td, options, pageIdMap, processedItems, item.id, stats);
@@ -178,7 +180,9 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                 await contentFrame.waitForTimeout(3000);
 
                 if (options.dodump) {
-                    const pageDumpPath = path.resolve(__dirname, `../debug_page_${sanitize(pageInfo.name)}.html`);
+                    const logsDir = path.resolve(__dirname, '../logs');
+                    await fs.ensureDir(logsDir);
+                    const pageDumpPath = path.join(logsDir, `debug_page_${sanitize(pageInfo.name)}.html`);
                     await fs.writeFile(pageDumpPath, await contentFrame.content());
                 }
 
@@ -337,9 +341,11 @@ async function runExport(options = {}) {
                         contentFrame = f;
                         logger.success(`Found content frame (navigation): ${f.url()}`);
                         if (options.dodump) {
-                            logger.warn('Dumping content frame HTML to debug_notebook_content.html...');
+                            const logsDir = path.resolve(__dirname, '../logs');
+                            await fs.ensureDir(logsDir);
+                            logger.warn('Dumping content frame HTML to logs/debug_notebook_content.html...');
                             const frameContent = await f.content();
-                            await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
+                            await fs.writeFile(path.join(logsDir, 'debug_notebook_content.html'), frameContent);
                         }
                         break;
                     }
@@ -430,9 +436,11 @@ async function runExport(options = {}) {
                         logger.success(`Found content frame (navigation): ${f.url()}`);
 
                         if (options.dodump) {
-                            logger.warn('Dumping content frame HTML to debug_notebook_content.html...');
+                            const logsDir = path.resolve(__dirname, '../logs');
+                            await fs.ensureDir(logsDir);
+                            logger.warn('Dumping content frame HTML to logs/debug_notebook_content.html...');
                             const frameContent = await f.content();
-                            await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
+                            await fs.writeFile(path.join(logsDir, 'debug_notebook_content.html'), frameContent);
                         }
                         break;
                     }
@@ -521,7 +529,9 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                     await selectSection(contentFrame, item.id);
                     await contentFrame.waitForTimeout(5000);
                     if (options.dodump) {
-                        const dumpPath = path.resolve(__dirname, `../debug_group_${sanitize(item.name)}.html`);
+                        const logsDir = path.resolve(__dirname, '../logs');
+                        await fs.ensureDir(logsDir);
+                        const dumpPath = path.join(logsDir, `debug_group_${sanitize(item.name)}.html`);
                         await fs.writeFile(dumpPath, await contentFrame.content());
                     }
                     await processSectionsElectron(contentFrame, groupDir, td, pageIdMap, processedItems, item.id, stats);
@@ -596,7 +606,9 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                     await contentFrame.waitForTimeout(3000);
 
                     if (options.dodump) {
-                        const pageDumpPath = path.resolve(__dirname, `../debug_page_${sanitize(pageInfo.name)}.html`);
+                        const logsDir = path.resolve(__dirname, '../logs');
+                        await fs.ensureDir(logsDir);
+                        const pageDumpPath = path.join(logsDir, `debug_page_${sanitize(pageInfo.name)}.html`);
                         await fs.writeFile(pageDumpPath, await contentFrame.content());
                     }
 
@@ -706,9 +718,11 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                         log('success', `Found content frame: ${f.url()}`);
 
                         if (options.dodump) {
-                            log('warn', 'Dumping content frame HTML to debug_notebook_content.html...');
+                            const logsDir = path.resolve(__dirname, '../logs');
+                            await fs.ensureDir(logsDir);
+                            log('warn', 'Dumping content frame HTML to logs/debug_notebook_content.html...');
                             const frameContent = await f.content();
-                            await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
+                            await fs.writeFile(path.join(logsDir, 'debug_notebook_content.html'), frameContent);
                         }
                         break;
                     }
@@ -781,9 +795,11 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                     log('success', `Found content frame: ${f.url()}`);
 
                     if (options.dodump) {
-                        log('warn', 'Dumping content frame HTML to debug_notebook_content.html...');
+                        const logsDir = path.resolve(__dirname, '../logs');
+                        await fs.ensureDir(logsDir);
+                        log('warn', 'Dumping content frame HTML to logs/debug_notebook_content.html...');
                         const frameContent = await f.content();
-                        await fs.writeFile(path.resolve(__dirname, '../debug_notebook_content.html'), frameContent);
+                        await fs.writeFile(path.join(logsDir, 'debug_notebook_content.html'), frameContent);
                     }
                     break;
                 }
