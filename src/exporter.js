@@ -678,6 +678,56 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
 
     let session;
     try {
+        if (options.notebookLink) {
+            log('info', 'Notebook link provided — skipping notebook listing.');
+            session = await openNotebookByLink(options);
+            const notebookName = session.notebookName || 'Notebook';
+            log('info', `Exporting notebook: ${notebookName}`);
+
+            log('info', 'Looking for OneNote content frame...');
+            await session.page.waitForTimeout(10000);
+
+            const frames = session.page.frames();
+            let contentFrame = null;
+            for (const f of frames) {
+                try {
+                    const hasSections = await f.$('.sectionList');
+                    if (hasSections) {
+                        contentFrame = f;
+                        log('success', `Found content frame: ${f.url()}`);
+                        break;
+                    }
+                } catch (e) {}
+            }
+            if (!contentFrame) {
+                log('warn', 'Could not auto-detect content frame. Using main page as fallback...');
+                contentFrame = session.page;
+            }
+
+            const baseDir = options.exportDir || path.resolve(__dirname, '../output');
+            const outputBase = path.resolve(baseDir, sanitize(notebookName));
+            await fs.ensureDir(outputBase);
+            const td = createMarkdownConverter();
+
+            log('info', 'Scanning sections...');
+            try {
+                await contentFrame.waitForSelector('.sectionList', { timeout: 10000 });
+            } catch (e) {
+                log('warn', 'Timeout waiting for .sectionList, trying to scrape anyway...');
+            }
+
+            const pageIdMap = {};
+            const stats = { totalPages: 0, totalAssets: 0 };
+            await processSectionsElectron(contentFrame, outputBase, td, pageIdMap, new Set(), null, stats);
+
+            log('info', 'Resolving internal links...');
+            await resolveInternalLinks(pageIdMap, outputBase);
+
+            log('success', 'Export complete!');
+            sendEvent('export-complete', { totalPages: stats.totalPages, totalAssets: stats.totalAssets, outputDir: outputBase });
+            return { success: true, ...stats, outputDir: outputBase };
+        }
+
         log('info', 'Fetching notebooks...');
         session = await listNotebooks({ ...options, keepOpen: true });
         const { notebooks } = session;

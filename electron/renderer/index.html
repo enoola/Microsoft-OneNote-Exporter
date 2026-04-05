@@ -148,19 +148,31 @@
                     <p class="subtitle">Select a notebook and export it to Obsidian-compatible Markdown.</p>
                 </div>
 
-                <div class="card">
-                    <h3 class="card-title"><span>📚</span> Notebook Selection</h3>
-
-                    <div class="form-group">
-                        <label for="notebook-select">Notebook</label>
-                        <div class="select-wrapper">
-                            <select id="notebook-select">
-                                <option value="">— Loading notebooks… —</option>
-                            </select>
-                        </div>
+                <div class="card" id="notebook-selection-card">
+                    <div class="card-tabs">
+                        <button class="tab-btn active" id="tab-list">Select from List</button>
+                        <button class="tab-btn" id="tab-link">Direct URL</button>
                     </div>
 
-                    <button id="btn-refresh-notebooks" class="btn btn-ghost btn-sm">↺ Refresh list</button>
+                    <div id="section-list">
+                        <div class="form-group">
+                            <label for="notebook-select">Notebook</label>
+                            <div class="select-wrapper">
+                                <select id="notebook-select">
+                                    <option value="">— Loading notebooks… —</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button id="btn-refresh-notebooks" class="btn btn-ghost btn-sm">↺ Refresh list</button>
+                    </div>
+
+                    <div id="section-link" style="display:none">
+                        <div class="form-group">
+                            <label for="notebook-link">Notebook URL</label>
+                            <input type="text" id="notebook-link" placeholder="https://onedrive.live.com/redir?resid=...">
+                            <p class="hint" style="font-size:11px; margin-top:4px; opacity:0.7">Paste the full URL to your OneNote notebook as seen in the browser.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="card">
