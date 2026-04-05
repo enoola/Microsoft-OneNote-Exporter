@@ -21,6 +21,7 @@ let isAuthenticated = false;
 let availableNotebooks = [];
 let exportOutputDir = null;
 let unsubscribeEvents = null;
+let exportMode = 'list'; // 'list' or 'link'
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -47,6 +48,11 @@ const loginLogClear  = $('login-log-clear');
 
 const notebookSelect         = $('notebook-select');
 const btnRefresh             = $('btn-refresh-notebooks');
+const tabList                = $('tab-list');
+const tabLink                = $('tab-link');
+const sectionList            = $('section-list');
+const sectionLink            = $('section-link');
+const notebookLinkInput      = $('notebook-link');
 const exportDirectory        = $('export-directory');
 const btnSelectDirectory     = $('btn-select-directory');
 const exportNotheadless      = $('export-notheadless');
@@ -348,6 +354,26 @@ async function loadNotebooks() {
 
 btnRefresh.addEventListener('click', loadNotebooks);
 
+tabList.addEventListener('click', () => {
+    exportMode = 'list';
+    tabList.classList.add('active');
+    tabLink.classList.remove('active');
+    sectionList.style.display = '';
+    sectionLink.style.display = 'none';
+    // Enable export button only if a notebook is available in the select
+    btnExport.disabled = !notebookSelect.value;
+});
+
+tabLink.addEventListener('click', () => {
+    exportMode = 'link';
+    tabLink.classList.add('active');
+    tabList.classList.remove('active');
+    sectionList.style.display = 'none';
+    sectionLink.style.display = '';
+    // Always enable when switching to Link mode (validation happens on click)
+    btnExport.disabled = false;
+});
+
 btnSelectDirectory.addEventListener('click', async () => {
     const current = exportDirectory.value;
     const selected = await window.electronAPI.invoke('select-directory', current);
@@ -359,10 +385,25 @@ btnSelectDirectory.addEventListener('click', async () => {
 // ─── Export ───────────────────────────────────────────────────────────────
 
 btnExport.addEventListener('click', async () => {
-    const notebook = notebookSelect.value;
-    if (!notebook) {
-        appendLog(exportLog, 'warn', 'Please select a notebook first.');
-        return;
+    let notebook = null;
+    let notebookLink = null;
+
+    if (exportMode === 'list') {
+        notebook = notebookSelect.value;
+        if (!notebook) {
+            appendLog(exportLog, 'warn', 'Please select a notebook first.');
+            return;
+        }
+    } else {
+        notebookLink = notebookLinkInput.value.trim();
+        if (!notebookLink) {
+            appendLog(exportLog, 'warn', 'Please enter a notebook URL.');
+            return;
+        }
+        if (!notebookLink.startsWith('http')) {
+            appendLog(exportLog, 'warn', 'Please enter a valid URL starting with http:// or https://');
+            return;
+        }
     }
 
     btnExport.disabled = true;
@@ -379,6 +420,7 @@ btnExport.addEventListener('click', async () => {
 
     await window.electronAPI.invoke('start-export', {
         notebook,
+        notebookLink,
         exportDir: exportDirectory.value,
         notheadless: exportNotheadless.checked,
         nopassasked: exportNopassasked.checked,
