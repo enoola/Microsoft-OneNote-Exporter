@@ -112,6 +112,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         Logger.debug(`      [Office Online] Clicked "File"`);
 
         // 2. Click "Save As" or "Create a Copy"
+        Logger.info('Will wait 2 seconds to let the File menu load.');
         await page.waitForTimeout(2000);
 
         const saveAsPatterns = [/Save as/i, /Create a Copy/i, /Enregistrer sous/i, /Créer une copie/i];
@@ -130,6 +131,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         Logger.debug(`      [Office Online] Clicked "Save As / Create a Copy"`);
 
         // 3. Click "Download a Copy"
+        Logger.info('Will wait 2 seconds to let the Save As / Create a Copy menu load properly');
         await page.waitForTimeout(2000);
         const downloadPatterns = [/Download a Copy|Télécharger une Copie|Download a copy|Télécharger une copie/i];
         let finalDownloadItem = null;
@@ -154,6 +156,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         // 4. Handle confirmation dialog if it appears (Office Online overlay)
         try {
             Logger.debug(`      [Office Online] Waiting for confirmation dialog to appear...`);
+            Logger.info('Will wait 3 seconds to let the confirmation dialog load properly');
             await page.waitForTimeout(3000); // Give it time to animate in
 
             const selectors = [
@@ -163,7 +166,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
                 '.fui-Button:has-text("Download a copy")',
                 'button[aria-label="Download a copy"]'
             ];
-            
+
             let confirmationBtn = null;
             // Check top-level page AND the frame target
             for (const selector of selectors) {
@@ -250,6 +253,7 @@ async function tryUIClick(contentFrame, attachId, outputPath) {
             const downloadBtnSelector = 'button[name="Download"], button[aria-label="Download"], button:has-text("Download"), .ms-Button--primary:has-text("Download")';
 
             // Wait a moment for dynamic UI to react
+            Logger.info('Will wait 2 seconds to let the confirmation dialog load.');
             await page.waitForTimeout(2000);
 
             // Using locators to find visible button
