@@ -1,6 +1,6 @@
 const fs = require('fs-extra');
 const path = require('path');
-const chalk = require('chalk');
+const Logger = require('./utils/logger');
 const { withRetry } = require('./utils/retry');
 
 /**
@@ -13,7 +13,7 @@ async function tryDirectDownload(page, url, outputPath) {
         return false;
     }
 
-    console.log(chalk.cyan(`      [Strategy: Direct] Attempting Cloud Page Navigation...`));
+    Logger.info(`      [Strategy: Direct] Attempting Cloud Page Navigation...`);
 
     const separator = url.includes('?') ? '&' : '?';
     const downloadUrl = url + (url.includes('download=1') ? '' : separator + 'download=1');
@@ -35,18 +35,18 @@ async function tryDirectDownload(page, url, outputPath) {
         let download = await downloadPromise;
         if (download) {
             await download.saveAs(outputPath);
-            console.debug(`      [Strategy: Direct] Successfully captured download from cloud page.`);
+            Logger.debug(`      [Strategy: Direct] Successfully captured download from cloud page.`);
             await tempPage.close().catch(() => {});
             return true;
         }
 
         // FALLBACK: If no download triggered automatically, the browser probably landed on a viewer
-        console.log(chalk.cyan(`      [Strategy: Direct] No auto-download. Attempting Office Online manual sequence...`));
+        Logger.info(`      [Strategy: Direct] No auto-download. Attempting Office Online manual sequence...`);
         if (await handleOfficeOnlineDownload(tempPage, outputPath)) {
             return true;
         }
     } catch (e) {
-        console.debug(`      Cloud page download sequence failed: ${e.message}`);
+        Logger.debug(`      Cloud page download sequence failed: ${e.message}`);
     } finally {
         if (!tempPage.isClosed()) await tempPage.close().catch(() => {});
     }
@@ -62,7 +62,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         // 0. Handle MCAS interstitial if it appears in the new tab
         const mcasBtn = await page.$('#hiddenformSubmitBtn');
         if (mcasBtn) {
-            console.log(chalk.cyan(`      [Office Online] Detected MCAS interstitial in new tab, dismissing...`));
+            Logger.info(`      [Office Online] Detected MCAS interstitial in new tab, dismissing...`);
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
                 mcasBtn.click()
@@ -71,7 +71,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         }
 
         // SharePoint/Office Online can be very slow to load
-        console.debug(`      [Office Online] Waiting for page/ribbon to initialize...`);
+        Logger.debug(`      [Office Online] Waiting for page/ribbon to initialize...`);
         await page.waitForTimeout(5000);
 
         // Office Online often puts everything in a frame named 'WacFrame'
@@ -79,7 +79,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         const frames = page.frames();
         const wacFrame = frames.find(f => f.name().includes('WacFrame') || f.url().includes('WacFrame'));
         if (wacFrame) {
-            console.debug(`      [Office Online] Switching to WacFrame...`);
+            Logger.debug(`      [Office Online] Switching to WacFrame...`);
             target = wacFrame;
         }
 
@@ -109,7 +109,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
 
         await fileBtn.waitFor({ state: 'visible', timeout: 20000 });
         await fileBtn.click();
-        console.debug(`      [Office Online] Clicked "File"`);
+        Logger.debug(`      [Office Online] Clicked "File"`);
 
         // 2. Click "Save As" or "Create a Copy"
         await page.waitForTimeout(2000);
@@ -127,7 +127,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         }
 
         await saveAsItem.click();
-        console.debug(`      [Office Online] Clicked "Save As / Create a Copy"`);
+        Logger.debug(`      [Office Online] Clicked "Save As / Create a Copy"`);
 
         // 3. Click "Download a Copy"
         await page.waitForTimeout(2000);
@@ -149,14 +149,14 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         
         await finalDownloadItem.waitFor({ state: 'visible', timeout: 10000 });
         await finalDownloadItem.click({ force: true });
-        console.debug(`      [Office Online] Clicked "Download a Copy"`);
+        Logger.debug(`      [Office Online] Clicked "Download a Copy"`);
 
         const download = await downloadPromise;
         await download.saveAs(outputPath);
-        console.log(chalk.green(`      [Strategy: Direct] Successfully captured download via Office Online manual UI.`));
+        Logger.success(`      [Strategy: Direct] Successfully captured download via Office Online manual UI.`);
         return true;
     } catch (e) {
-        console.debug(`      Office Online manual sequence failed: ${e.message}`);
+        Logger.debug(`      Office Online manual sequence failed: ${e.message}`);
         return false;
     }
 }
@@ -172,11 +172,11 @@ async function tryUIClick(contentFrame, attachId, outputPath) {
     // Wait for the element to be present
     const link = await contentFrame.waitForSelector(selector, { state: 'attached', timeout: 5000 }).catch(() => null);
     if (!link) {
-        console.log(chalk.yellow(`      [Strategy: UI Click] Could not find clickable element for ${attachId}`));
+        Logger.warn(`      [Strategy: UI Click] Could not find clickable element for ${attachId}`);
         return false;
     }
 
-    console.log(chalk.cyan(`      [Strategy: UI Click] Triggering double click and waiting for download event...`));
+    Logger.info(`      [Strategy: UI Click] Triggering double click and waiting for download event...`);
     try {
         await link.scrollIntoViewIfNeeded();
 
@@ -202,10 +202,10 @@ async function tryUIClick(contentFrame, attachId, outputPath) {
             const btnInFrame = contentFrame.locator(downloadBtnSelector).filter({ visible: true }).first();
 
             if (await btn.isVisible()) {
-                console.log(chalk.cyan(`      [Strategy: UI Click] Found confirmation button on page, clicking...`));
+                Logger.info(`      [Strategy: UI Click] Found confirmation button on page, clicking...`);
                 await btn.click();
             } else if (await btnInFrame.isVisible()) {
-                console.log(chalk.cyan(`      [Strategy: UI Click] Found confirmation button in frame, clicking...`));
+                Logger.info(`      [Strategy: UI Click] Found confirmation button in frame, clicking...`);
                 await btnInFrame.click();
             }
         } catch (e) {
@@ -252,7 +252,7 @@ async function tryUIClick(contentFrame, attachId, outputPath) {
             }
         }
     } catch (e) {
-        console.debug(`      UI click strategy failed for ${attachId}: ${e.message}`);
+        Logger.debug(`      UI click strategy failed for ${attachId}: ${e.message}`);
     }
     return false;
 }
@@ -277,31 +277,31 @@ async function downloadAttachment(contentFrame, info, outputPath) {
 
         // 1. Try direct download (Cloud Page Navigation for SharePoint/OneDrive)
         if (await tryDirectDownload(page, info.src, outputPath)) {
-            console.log(chalk.green(`      [Success] Downloaded via Strategy: Direct (Cloud Page)`));
+            Logger.success(`      [Success] Downloaded via Strategy: Direct (Cloud Page)`);
             return true;
         }
 
         // 2. Try UI click
         if (await tryUIClick(contentFrame, info.id, outputPath)) {
-            console.log(chalk.green(`      [Success] Downloaded via Strategy: UI Click`));
+            Logger.success(`      [Success] Downloaded via Strategy: UI Click`);
             return true;
         }
 
         // 3. Fallback: direct request on the original URL (non-forced)
         if (info.src) {
-            console.log(chalk.cyan(`      [Strategy: Fallback] Attempting direct request...`));
+            Logger.info(`      [Strategy: Fallback] Attempting direct request...`);
             try {
                 const response = await context.request.get(info.src, { timeout: 30000 });
                 if (response.ok()) {
                     const contentType = response.headers()['content-type'] || '';
                     if (!contentType.includes('text/html')) {
                         await fs.writeFile(outputPath, await response.body());
-                        console.log(chalk.green(`      [Success] Downloaded via Strategy: Fallback`));
+                        Logger.success(`      [Success] Downloaded via Strategy: Fallback`);
                         return true;
                     }
                 }
             } catch (e) {
-                console.debug(`      Fallback direct request failed: ${e.message}`);
+                Logger.debug(`      Fallback direct request failed: ${e.message}`);
             }
         }
 
@@ -312,7 +312,7 @@ async function downloadAttachment(contentFrame, info, outputPath) {
         operationName: `Download attachment ${info.originalName}`,
         silent: true
     }).catch(e => {
-        console.error(`      Error: ${e.message}`);
+        Logger.error(`      Error: ${e.message}`);
         return false;
     });
 }
