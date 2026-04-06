@@ -98,7 +98,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
                 await processSections(contentFrame, groupDir, td, options, pageIdMap, processedItems, item.id, stats);
                 logger.info(`Returning from group: ${item.name}`);
                 await navigateBack(contentFrame);
-                logger.info('Will wait 3 seconds to let the document load properly');
+                logger.info('Will wait 3 seconds to let the frame load properly');
                 await contentFrame.waitForTimeout(3000);
             } catch (e) {
                 logger.error(`Failed to process group ${item.name}:`, e);
@@ -114,7 +114,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
             continue;
         }
 
-        logger.info('Will wait 3 seconds to let the document load properly');
+        logger.info('Will wait 3 seconds to let the section load properly');
         await contentFrame.waitForTimeout(3000);
 
         // Check for password protection
@@ -122,7 +122,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
 
         // If locked, wait another 2s and re-check to avoid transition glitches from previous sections
         if (isLocked) {
-            logger.info('Will wait 2 seconds to let the document load properly');
+            logger.info('Will wait 2 seconds to let the section frame load properly');
             await contentFrame.waitForTimeout(2000);
             isLocked = await isSectionLocked(contentFrame);
         }
@@ -181,7 +181,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
 
             try {
                 await selectPage(contentFrame, pageInfo.id);
-                logger.info('Will wait 3 seconds to let the document load properly');
+                logger.info('Will wait 3 seconds for page to render');
                 await contentFrame.waitForTimeout(3000);
 
                 if (options.dodump) {
@@ -334,8 +334,8 @@ async function runExport(options = {}) {
             const notebookName = session.notebookName || 'Notebook';
             logger.info(`Exporting notebook: ${notebookName}`);
 
-            logger.info('Looking for OneNote content frame...');
-            logger.info('Will wait 10 seconds to let the document load properly');
+            //logger.info('Looking for OneNote content frame...');
+            logger.info('Will wait 10 seconds to let the OneNote content frame to load properly');
             await session.page.waitForTimeout(10000);
 
             const frames = session.page.frames();
@@ -428,7 +428,7 @@ async function runExport(options = {}) {
 
             logger.info('Looking for OneNote content frame...');
             // Wait for frames to have time to load dynamic content
-            logger.info('Will wait 10 seconds to let the document load properly');
+            logger.info('Will wait 10 seconds to let the content frame to load properly');
             await session.page.waitForTimeout(10000);
 
             const frames = session.page.frames();
@@ -548,7 +548,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                     await processSectionsElectron(contentFrame, groupDir, td, pageIdMap, processedItems, item.id, stats);
                     log('info', `Returning from group: ${item.name}`);
                     await navigateBack(contentFrame);
-                    log('info', 'Will wait 3 seconds to let the document load properly');
+                    log('info', 'Will wait 3 seconds to let the page load properly');
                     await contentFrame.waitForTimeout(3000);
                 } catch (e) {
                     log('error', `Failed to process group ${item.name}: ${e.message}`);
@@ -564,11 +564,11 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                 continue;
             }
 
-            log('info', 'Will wait 3 seconds to let the document load properly');
+            log('info', 'Will wait 3 seconds to let the section frame load properly');
             await contentFrame.waitForTimeout(3000);
             let isLocked = await isSectionLocked(contentFrame);
             if (isLocked) {
-                log('info', 'Will wait 2 seconds to let the document load properly');
+                log('info', 'Will wait 2 seconds to let the section frame load properly');
                 await contentFrame.waitForTimeout(2000);
                 isLocked = await isSectionLocked(contentFrame);
             }
@@ -597,7 +597,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                 await new Promise((resolve) => {
                     ipcMain.once('section-unlocked', () => resolve());
                 });
-                log('info', 'Will wait 2 seconds to let the document load properly');
+                log('info', 'Will wait 2 seconds to let the frame of locked section load properly');
                 await contentFrame.waitForTimeout(2000);
                 isLocked = await isSectionLocked(contentFrame);
                 if (isLocked) {
@@ -618,7 +618,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
 
                 try {
                     await selectPage(contentFrame, pageInfo.id);
-                    log('info', 'Will wait 3 seconds to let the document load properly');
+                    log('info', 'Will wait 3 seconds to let the page load properly');
                     await contentFrame.waitForTimeout(3000);
 
                     if (options.dodump) {
@@ -722,7 +722,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
             log('info', `Exporting notebook: ${notebookName}`);
 
             log('info', 'Looking for OneNote content frame...');
-            log('info', 'Will wait 10 seconds to let the document load properly');
+            log('info', 'Will wait 10 seconds to let the frame load properly');
             await session.page.waitForTimeout(10000);
 
             const frames = session.page.frames();
@@ -800,7 +800,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
         log('success', 'Successfully entered notebook.');
 
         log('info', 'Looking for OneNote content frame...');
-        log('info', 'Will wait 10 seconds to let the document load properly');
+        log('info', 'Will wait 10 seconds to let the onenote document load properly');
         await session.page.waitForTimeout(10000);
 
         const frames = session.page.frames();
