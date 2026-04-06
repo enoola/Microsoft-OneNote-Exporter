@@ -312,11 +312,22 @@ async function getPageContent(frame) {
                 return { isFile: false, isCloud: false };
             }
 
-            const isCloud = (className.includes('hyperlinkv2') || className.includes('cloudfile') || className.includes('onedrive') || parentClass.includes('cloudfile')) &&
-                (href.includes('sharepoint.com') || href.includes('1drv.ms') || href.includes('onedrive.live.com'));
+            const isSharePoint = href.includes('sharepoint.com') || href.includes('1drv.ms') || href.includes('onedrive.live.com');
 
             // Extension check helper (cases like "file.pdf" or "file.pdf.xlsx")
-            const fileExtRegex = /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)(\?|$)/i;
+            // Broadened to search ANYWHERE in string (handles ?web=1 or Doc2.aspx?file=...)
+            const fileExtRegex = /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)(\?|&|$)/i;
+
+            const isCloud = (className.includes('hyperlinkv2') || className.includes('cloudfile') || className.includes('onedrive') || parentClass.includes('cloudfile')) &&
+                isSharePoint;
+
+            // SharePoint/OneDrive specific document markers
+            const isOfficeCloudDoc = isSharePoint && (
+                href.includes('/:x:/') || href.includes('/:w:/') || href.includes('/:p:/') || // Excel, Word, PowerPoint markers
+                href.includes('/Doc.aspx') || href.includes('/Doc2.aspx') ||
+                href.includes('WopiFrame.aspx') ||
+                href.includes('WopiFrame2.aspx')
+            );
 
             // Check if it's a known attachment or looks like a file resource
             const isLocal = className.includes('attachment') ||
@@ -327,12 +338,11 @@ async function getPageContent(frame) {
                 className.includes('fileicon') ||
                 fileExtRegex.test(title) ||
                 fileExtRegex.test(ariaLabel) ||
-                // Check text separately with truncation awareness: 
-                // Don't just check at the end ($), because OneNote might append "..."
+                // Check text separately with truncation awareness
                 fileExtRegex.test(text.split('\n')[0].trim()) ||
                 fileExtRegex.test(href);
 
-            return { isFile: isCloud || isLocal, isCloud };
+            return { isFile: isCloud || isLocal || isOfficeCloudDoc, isCloud: isCloud || isOfficeCloudDoc };
         };
 
         // 3. Process File Attachments and Internal Links
@@ -359,30 +369,38 @@ async function getPageContent(frame) {
                 // Prioritize full names from attributes (OneNote Web often truncates link text)
                 const ariaLabel = link.getAttribute('aria-label') || '';
                 // Use strict regex to avoid matching truncated text like "...6P4" as an extension
-                const fileExtRegex = /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)(\?|$)/i;
+                const fileExtRegex = /\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg)(\?|&|$)/i;
 
                 let originalName = '';
                 if (fileExtRegex.test(title)) originalName = title;
                 else if (fileExtRegex.test(ariaLabel)) originalName = ariaLabel;
-                else originalName = text.split('\n')[0].trim();
+                else if (fileExtRegex.test(text.split('\n')[0].trim())) originalName = text.split('\n')[0].trim();
 
                 // Detailed logging for debugging
-                console.debug(`[Scraper] Analyzing ${link.tagName} (ID: ${attachId}):\n      - title: "${title}"\n      - aria-label: "${ariaLabel}"\n      - text: "${text.substring(0, 30)}..."\n      - initialName: "${originalName}"`);
+                console.debug(`[Scraper] Analyzing ${link.tagName} (ID: ${attachId}):\n      - title: "${title}"\n      - aria-label: "${ariaLabel}"\n      - text: "${text.substring(0, 30)}..."\n      - href: "${href.substring(0, 50)}..."`);
 
                 if (!originalName || originalName === 'attached_file' || !fileExtRegex.test(originalName)) {
                     if (href) {
                         try {
                             const urlObj = new URL(href, 'https://example.com');
-                            const fileParam = urlObj.searchParams.get('file');
+                            const fileParam = urlObj.searchParams.get('file') || urlObj.searchParams.get('FileName');
                             if (fileParam && fileExtRegex.test(fileParam)) {
                                 originalName = fileParam;
                             } else {
-                                const match = urlObj.pathname.match(/([^\/]+\.[a-zA-Z0-9]+)$/);
-                                if (match) originalName = match[1];
+                                // Try to find something that looks like a filename in the path
+                                const pathParts = urlObj.pathname.split('/');
+                                const lastPart = pathParts[pathParts.length - 1];
+                                if (fileExtRegex.test(lastPart)) {
+                                    originalName = lastPart;
+                                } else {
+                                    // Look for the extension earlier in the URL (SharePoint style)
+                                    const match = href.match(/([^\/]+\.(docx?|xlsx?|pptx?|pdf|txt|md|csv|zip|rar|7z|json|xml|log|png|jpe?g|gif|svg))(?:\?|&|$)/i);
+                                    if (match) originalName = match[1];
+                                }
                             }
                         } catch (e) {
                             // Fallback regex
-                            const match = href.match(/([^\/]+\.[a-zA-Z0-9]+)(?:\?|$)/);
+                            const match = href.match(/([^\/]+\.[a-zA-Z0-9]+)(?:\?|&|$)/);
                             if (match) originalName = match[1];
                         }
                     }
@@ -395,20 +413,37 @@ async function getPageContent(frame) {
                 link.setAttribute('data-filename', originalName);
 
                 // Tag the REAL element for clicking
-                // Match by exact href first, then title, then fuzzy text
+                // Match by exact href first, then fuzzy href, then title, then fuzzy text
                 let realLink = null;
+
+                const normalize = (u) => {
+                    try {
+                        const url = new URL(u, 'https://example.com');
+                        url.search = ''; // Strip query params for matching
+                        return url.toString().toLowerCase();
+                    } catch (e) { return (u || '').toLowerCase(); }
+                };
+
+                const normHref = normalize(href);
+
                 if (href) {
-                    realLink = realPotentialLinks.find(rl => rl.getAttribute('href') === href);
+                    realLink = realPotentialLinks.find(rl => rl.getAttribute('href') === href) ||
+                               realPotentialLinks.find(rl => normalize(rl.getAttribute('href')) === normHref);
                 }
                 if (!realLink && title) {
                     realLink = realPotentialLinks.find(rl => rl.getAttribute('title') === title);
                 }
                 if (!realLink && text) {
-                    realLink = realPotentialLinks.find(rl => rl.innerText.trim() === text);
+                    const normText = text.toLowerCase().trim();
+                    realLink = realPotentialLinks.find(rl => rl.innerText.toLowerCase().trim() === normText) ||
+                               realPotentialLinks.find(rl => rl.innerText.toLowerCase().includes(normText));
                 }
 
                 if (realLink) {
+                    console.debug(`[Scraper] Successfully matched real element for ${attachId}`);
                     realLink.setAttribute('data-one-attach-id', attachId);
+                } else {
+                    console.warn(`[Scraper] FAILED to match real element for ${attachId}. UI Click strategy will fail.`);
                 }
                 return;
             }

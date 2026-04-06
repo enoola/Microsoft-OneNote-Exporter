@@ -101,7 +101,7 @@ DOM wiring:
 ### Automated Tests
 Existing tests cover CLI-layer logic (`linkResolver`, `parser`) and don't touch auth/exporter internals. They will continue to pass — verify with:
 ```bash
-cd /Users/enola/Workspace/20260205_MSOneNoteExporter
+cd /Users/enola/Workspace/20260205_MSOneNoteExporter/
 npm test
 ```
 
