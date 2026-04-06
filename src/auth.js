@@ -103,7 +103,7 @@ async function login(credentials = {}) {
                 });
 
                 // Give the UI a moment to settle into the next screen (MFA/Password)
-                logger.info('Will wait 1 seconds to let the document load properly');
+                logger.info('Will wait 1 seconds to give the UI a moment to settle into the next screen (MFA/Password)');
                 await page.waitForTimeout(1000);
 
                 // Check if an error appeared immediately after clicking Next (e.g. invalid email)
@@ -279,7 +279,7 @@ async function login(credentials = {}) {
                 if (await submitButton.isDisabled()) {
                     logger.debug('Submit button is disabled. It might be the wrong one or the password field is not considered filled.');
                     // Try to click anyway as a fallback, or wait a bit longer
-                    logger.info('Will wait 1 seconds to let the document load properly');
+                    logger.info('Will wait 1 seconds to let the submit button load properly');
                     await page.waitForTimeout(1000);
                 }
 
@@ -480,13 +480,13 @@ async function login(credentials = {}) {
 
         logger.info('Saving authentication state...');
         await context.storageState({ path: AUTH_FILE });
-        
+
         // Persist email + time so that check command can show the logged-in user
         await fs.writeJson(AUTH_META_FILE, {
             email: email || 'manual login',
             loginTime: new Date().toISOString()
         });
-        
+
         logger.success(`Authentication successful! State saved to ${AUTH_FILE}`);
     } catch (error) {
         logger.error('Authentication failed or cancelled:', error);
@@ -522,7 +522,7 @@ async function checkAuth() {
         await page.goto(ONENOTE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
         // Wait briefly to allow client-side redirects to Microsoft login pages if session is dead
-        logger.info('Will wait 2 seconds to let the document load properly');
+        logger.info('Will wait 2 sec to allow client-side redirects to Microsoft login pages if session is dead/');
         await page.waitForTimeout(2000);
 
         const url = page.url();
@@ -609,7 +609,7 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 await page.waitForSelector('input[name="loginfmt"]', { state: 'hidden', timeout: 15000 }).catch(() => {
                     log('debug', 'Email field still present, proceeding with caution.');
                 });
-                log('info', 'Will wait 1 seconds to let the document load properly');
+                log('info', 'Will wait 1 seconds to let mail field disappear.');
                 await page.waitForTimeout(1000);
                 const usernameError = page.locator('#usernameError');
                 if (await usernameError.isVisible({ timeout: 2000 })) {
@@ -732,9 +732,9 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
                 await page.fill('input[name="passwd"]', password);
                 const submitButton = page.locator('input[type="submit"], button[type="submit"]').filter({ hasText: /Sign in|Next|Finish/i }).first();
                 await submitButton.waitFor({ state: 'visible', timeout: 10000 });
-                if (await submitButton.isDisabled()) { 
-                    log('info', 'Will wait 1 seconds to let the document load properly');
-                    await page.waitForTimeout(1000); 
+                if (await submitButton.isDisabled()) {
+                    log('info', 'Will wait 1 seconds to let submit button load.');
+                    await page.waitForTimeout(1000);
                 }
                 await submitButton.click();
                 const passwordError = page.locator('#passwordError');

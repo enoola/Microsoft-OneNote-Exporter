@@ -27,7 +27,7 @@ async function dismissMcasInterstitial(page) {
 
     try {
         // Wait for the MCAS form to be fully rendered (up to 10 s)
-        await page.waitForSelector('#skip-disclaimer-checkbox', { timeout: 10000 }).catch(() => {});
+        await page.waitForSelector('#skip-disclaimer-checkbox', { timeout: 10000 }).catch(() => { });
 
         // Check the "Hide this notification for all apps for one week" checkbox
         // Actual element: <input type="checkbox" id="skip-disclaimer-checkbox">
@@ -49,7 +49,7 @@ async function dismissMcasInterstitial(page) {
         if (continueBtn) {
             logger.debug('MCAS: clicking "Continue in current browser"...');
             await Promise.all([
-                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => { }),
                 continueBtn.click()
             ]);
             logger.success('MCAS interstitial dismissed.');
@@ -107,7 +107,7 @@ async function listNotebooks(options = {}) {
         await dismissMcasInterstitial(page);
 
         // Extra grace period for SPA JS rendering
-        logger.info('Will wait 5 seconds to let the document load properly');
+        logger.info('Waiting 5 seconds for dynamic content to render...');
         await page.waitForTimeout(5000);
 
         // Dump main page content if requested
@@ -250,7 +250,7 @@ async function openNotebook(page, scrapeTarget, notebookId) {
         ]);
 
         logger.success('Notebook opened!');
-        logger.info('Will wait 5 seconds to let the document load properly');
+        logger.info('Will wait 5 seconds to let the page load properly');
         await page.waitForTimeout(5000);
 
     } catch (e) {
@@ -300,7 +300,7 @@ async function openNotebookByLink(options = {}) {
         await dismissMcasInterstitial(page);
 
         // Extra grace period for SPA JS rendering
-        logger.info('Will wait 5 seconds to let the document load properly');
+        logger.info('Waiting 5 seconds for dynamic content to render...');
         await page.waitForTimeout(5000);
 
         if (options.dodump) {
