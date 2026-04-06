@@ -11,7 +11,7 @@ The goal is to implement a unified logging system that captures all activity fro
 
 ### [Component] Core Logger Utility
 
-#### [MODIFY] [logger.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/utils/logger.js)
+#### [MODIFY] [logger.js](file:///Users/enola/Workspace//src/utils/logger.js)
 - Initialize a persistent log file at `logs/app.log`.
 - Add logic to strip ANSI/Chalk color codes before writing to the file.
 - Update all logging methods (`info`, `warn`, `error`, `success`, `debug`, `step`) to write to both the terminal (with colors) and the log file (plain text).
@@ -21,23 +21,23 @@ The goal is to implement a unified logging system that captures all activity fro
 
 ### [Component] Electron Integration
 
-#### [MODIFY] [preload.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/preload.js)
+#### [MODIFY] [preload.js](file:///Users/enola/Workspace//electron/preload.js)
 - Allow the `log-message` IPC channel to be sent from the renderer.
 
-#### [MODIFY] [main.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/main.js)
+#### [MODIFY] [main.js](file:///Users/enola/Workspace//electron/main.js)
 - Handle the `log-message` IPC event and route it to the `Logger` utility.
 
-#### [MODIFY] [renderer.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/electron/renderer/renderer.js)
+#### [MODIFY] [renderer.js](file:///Users/enola/Workspace//electron/renderer/renderer.js)
 - Update `appendLog` to send logs to the main process for filing, but only for logs that didn't originate from the main process (to avoid duplication).
 
 ---
 
 ### [Component] Backend Logic
 
-#### [MODIFY] [auth.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/auth.js)
+#### [MODIFY] [auth.js](file:///Users/enola/Workspace//src/auth.js)
 - In `loginForElectron`, update the internal `log` helper to call the `Logger` utility, ensuring these logs are recorded in the terminal and file.
 
-#### [MODIFY] [exporter.js](file:///Users/enola/Workspace/20260205_MSOneNoteExporter/src/exporter.js)
+#### [MODIFY] [exporter.js](file:///Users/enola/Workspace//src/exporter.js)
 - In `runExportForElectron`, update the internal `log` helper to call the `Logger` utility.
 
 ## Open Questions
