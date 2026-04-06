@@ -173,7 +173,7 @@ async function processSections(contentFrame, outputDir, td, options, pageIdMap, 
             if (processedItems.has(pageInfo.id)) continue;
             processedItems.add(pageInfo.id);
 
-            logger.info(`Exporting: ${pageInfo.name} ...`);
+            logger.info(`(1) Exporting: ${pageInfo.name} ...`);
 
             try {
                 await selectPage(contentFrame, pageInfo.id);
@@ -349,7 +349,7 @@ async function runExport(options = {}) {
                         }
                         break;
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
 
             if (!contentFrame) {
@@ -601,7 +601,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                 if (processedItems.has(pageInfo.id)) continue;
                 processedItems.add(pageInfo.id);
 
-                log('info', `Exporting: ${pageInfo.name} ...`);
+                log('info', `(2) Exporting: ${pageInfo.name} ...`);
                 sendEvent('progress', { pageName: pageInfo.name, totalPages: stats.totalPages, totalAssets: stats.totalAssets });
 
                 try {
@@ -672,7 +672,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                                     const urlObj = new URL(videoInfo.src);
                                     const potentialExt = urlObj.pathname.split('.').pop();
                                     if (potentialExt && potentialExt.length < 5 && /^[a-z0-9]+$/i.test(potentialExt)) ext = potentialExt;
-                                } catch (e) {}
+                                } catch (e) { }
                             }
                             const finalBaseName = `${sanitizedNoteName}_video_${assetCounter++}`;
                             const filePath = path.join(assetDir, `${finalBaseName}.${ext}`);
@@ -729,7 +729,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                         }
                         break;
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             if (!contentFrame) {
                 log('warn', 'Could not auto-detect content frame. Using main page as fallback...');
@@ -781,7 +781,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
             throw new Error('No notebook specified. Pass options.notebook.');
         }
 
-        log('info', `Exporting: ${selectedNotebook.name}`);
+        log('info', `(3) Exporting: ${selectedNotebook.name}`);
         await openNotebook(session.page, session.scrapeTarget, selectedNotebook.id);
         log('success', 'Successfully entered notebook.');
 
@@ -806,7 +806,7 @@ async function runExportForElectron(options = {}, sendEvent, ipcMain) {
                     }
                     break;
                 }
-            } catch (e) {}
+            } catch (e) { }
         }
         if (!contentFrame) {
             log('warn', 'Could not auto-detect content frame. Using main page as fallback...');
