@@ -20,12 +20,12 @@ async function tryDirectDownload(page, url, outputPath) {
 
     const context = page.context();
     const tempPage = await context.newPage();
-    
+
     try {
         // SharePoint authentication redirects can be slow
         // We'll race the direct download against a timer
         const downloadPromise = tempPage.waitForEvent('download', { timeout: 15000 }).catch(() => null);
-        
+
         await tempPage.goto(downloadUrl).catch(e => {
             if (!e.message.includes('Download is starting') && !e.message.includes('navigation was aborted')) {
                 throw e;
@@ -36,7 +36,7 @@ async function tryDirectDownload(page, url, outputPath) {
         if (download) {
             await download.saveAs(outputPath);
             Logger.debug(`      [Strategy: Direct] Successfully captured download from cloud page.`);
-            await tempPage.close().catch(() => {});
+            await tempPage.close().catch(() => { });
             return true;
         }
 
@@ -48,7 +48,7 @@ async function tryDirectDownload(page, url, outputPath) {
     } catch (e) {
         Logger.debug(`      Cloud page download sequence failed: ${e.message}`);
     } finally {
-        if (!tempPage.isClosed()) await tempPage.close().catch(() => {});
+        if (!tempPage.isClosed()) await tempPage.close().catch(() => { });
     }
     return false;
 }
@@ -64,10 +64,10 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         if (mcasBtn) {
             Logger.info(`      [Office Online] Detected MCAS interstitial in new tab, dismissing...`);
             await Promise.all([
-                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => { }),
                 mcasBtn.click()
             ]);
-            await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+            await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => { });
         }
 
         // SharePoint/Office Online can be very slow to load
@@ -86,7 +86,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
         // 1. Find and click "File"
         // Try common selectors for the File menu across multiple languages
         const fileBtnSelectors = [
-            'button:has-text("File")', 
+            'button:has-text("File")',
             'button:has-text("Fichier")',
             '#FileMenu',
             '#file-menu-id',
@@ -113,7 +113,7 @@ async function handleOfficeOnlineDownload(page, outputPath) {
 
         // 2. Click "Save As" or "Create a Copy"
         await page.waitForTimeout(2000);
-        
+
         const saveAsPatterns = [/Save as/i, /Create a Copy/i, /Enregistrer sous/i, /Créer une copie/i];
         let saveAsItem = null;
         for (const pattern of saveAsPatterns) {
@@ -131,14 +131,14 @@ async function handleOfficeOnlineDownload(page, outputPath) {
 
         // 3. Click "Download a Copy"
         await page.waitForTimeout(2000);
-        const downloadPatterns = [/Download a Copy|Télécharger une copie|Download a Copy|Télécharger une copie/i];
+        const downloadPatterns = [/Download a Copy|Télécharger une Copie|Download a copy|Télécharger une copie/i];
         let finalDownloadItem = null;
         for (const pattern of downloadPatterns) {
             finalDownloadItem = target.getByRole('menuitem', { name: pattern }).or(target.getByText(pattern)).first();
             if (await finalDownloadItem.isVisible()) break;
             finalDownloadItem = null;
         }
-        
+
         if (!finalDownloadItem) {
             // Fallback for some versions where it's a simple button or link
             finalDownloadItem = target.locator('button:has-text("Download"), a:has-text("Download"), button:has-text("Télécharger"), a:has-text("Télécharger")').first();
@@ -146,10 +146,64 @@ async function handleOfficeOnlineDownload(page, outputPath) {
 
         // Start waiting for download before clicking
         const downloadPromise = page.waitForEvent('download', { timeout: 45000 });
-        
+
         await finalDownloadItem.waitFor({ state: 'visible', timeout: 10000 });
         await finalDownloadItem.click({ force: true });
-        Logger.debug(`      [Office Online] Clicked "Download a Copy"`);
+        Logger.debug(`      [Office Online] Clicked "Download a Copy" submenu`);
+
+        // 4. Handle confirmation dialog if it appears (Office Online overlay)
+        try {
+            Logger.debug(`      [Office Online] Waiting for confirmation dialog to appear...`);
+            await page.waitForTimeout(3000); // Give it time to animate in
+
+            const selectors = [
+                '#DialogActionButton',
+                '[data-unique-id="DialogActionButton"]',
+                'button:has-text("Download a copy")',
+                '.fui-Button:has-text("Download a copy")',
+                'button[aria-label="Download a copy"]'
+            ];
+            
+            let confirmationBtn = null;
+            // Check top-level page AND the frame target
+            for (const selector of selectors) {
+                const btnPage = page.locator(selector).filter({ visible: true }).first();
+                if (await btnPage.isVisible({ timeout: 1000 }).catch(() => false)) {
+                    confirmationBtn = btnPage;
+                    Logger.debug(`      [Office Online] Found button on top-level page via ${selector}`);
+                    break;
+                }
+                if (target !== page) {
+                    const btnTarget = target.locator(selector).filter({ visible: true }).first();
+                    if (await btnTarget.isVisible({ timeout: 1000 }).catch(() => false)) {
+                        confirmationBtn = btnTarget;
+                        Logger.debug(`      [Office Online] Found button in WacFrame via ${selector}`);
+                        break;
+                    }
+                }
+            }
+
+            if (confirmationBtn) {
+                Logger.info(`      [Office Online] Confirmation dialog detected, clicking "Download a copy" button...`);
+                await confirmationBtn.click();
+            } else {
+                Logger.debug(`      [Office Online] No confirmation button found after searching page and frame.`);
+                // Diagnostic dump
+                try {
+                    const dumpDir = await Logger.getDumpDir();
+                    const timestamp = new Date().getTime();
+                    await fs.writeFile(path.join(dumpDir, `debug_office_online_${timestamp}.html`), await page.content());
+                    if (target !== page) {
+                        await fs.writeFile(path.join(dumpDir, `debug_office_online_frame_${timestamp}.html`), await target.content());
+                    }
+                    Logger.debug(`      [Office Online] Diagnostic dumps saved to logs/dumps.`);
+                } catch (dumpErr) {
+                    // Ignore dump errors
+                }
+            }
+        } catch (e) {
+            Logger.debug(`      [Office Online] Error while checking for confirmation: ${e.message}`);
+        }
 
         const download = await downloadPromise;
         await download.saveAs(outputPath);
@@ -192,6 +246,7 @@ async function tryUIClick(contentFrame, attachId, outputPath) {
         try {
             // OneNote often shows a "Download File" modal with a "Download" button
             // We search broadly for a Download button in the page or frame
+            //const downloadBtnSelector = 'button[name="Download"], button[aria-label="Download"], button:has-text("Download"), .ms-Button--primary:has-text("Download")';
             const downloadBtnSelector = 'button[name="Download"], button[aria-label="Download"], button:has-text("Download"), .ms-Button--primary:has-text("Download")';
 
             // Wait a moment for dynamic UI to react
