@@ -85,7 +85,7 @@ function now() {
     return new Date().toTimeString().split(' ')[0];
 }
 
-function appendLog(container, level, message) {
+function appendLog(container, level, message, skipFile = false) {
     const line = document.createElement('div');
     line.className = 'log-line';
 
@@ -104,6 +104,11 @@ function appendLog(container, level, message) {
     line.append(ts, lv, msg);
     container.appendChild(line);
     container.scrollTop = container.scrollHeight;
+
+    // Forward to main process for file logging if not already handled by main
+    if (!skipFile) {
+        window.electronAPI.send('log-message', { level, message });
+    }
 }
 
 // Human-friendly login time: "today at 07:35" or "Mar 22 at 07:35"
@@ -200,7 +205,7 @@ function subscribeToEvents(logContainer) {
     unsubscribeEvents = window.electronAPI.onMainEvent(({ type, payload }) => {
         switch (type) {
             case 'log':
-                appendLog(logContainer, payload.level, payload.message);
+                appendLog(logContainer, payload.level, payload.message, true);
                 break;
 
             case 'otc-required':
@@ -231,7 +236,7 @@ function subscribeToEvents(logContainer) {
                 progressCounts.textContent = `${payload.totalPages} pages · ${payload.totalAssets} assets`;
                 exportOutputDir = payload.outputDir;
                 btnOpenOutput.style.display = '';
-                appendLog(logContainer, 'success', `Done! Output: ${payload.outputDir}`);
+                appendLog(logContainer, 'success', `Done! Output: ${payload.outputDir}`, true);
                 btnExport.disabled = false;
                 btnExport.textContent = '📤 Start Export';
                 break;
@@ -239,7 +244,7 @@ function subscribeToEvents(logContainer) {
             case 'export-error':
                 progressLabel.textContent = '✗ Export failed';
                 progressBar.style.background = 'var(--error)';
-                appendLog(logContainer, 'error', payload.error);
+                appendLog(logContainer, 'error', payload.error, true);
                 btnExport.disabled = false;
                 btnExport.textContent = '📤 Start Export';
                 break;

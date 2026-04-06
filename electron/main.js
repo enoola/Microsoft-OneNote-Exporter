@@ -7,6 +7,7 @@ const path = require('path');
 const { loginForElectron, checkAuth, getAuthMeta, logout } = require('../src/auth');
 const { runExportForElectron } = require('../src/exporter');
 const { listNotebooks } = require('../src/navigator');
+const logger = require('../src/utils/logger');
 
 let mainWindow = null;
 
@@ -142,6 +143,11 @@ ipcMain.handle('open-output-folder', async (_event, folderPath) => {
         console.error(`[IPC] Exception in open-output-folder: ${e.message}`);
         return { success: false, error: e.message };
     }
+});
+
+// Log a message from the renderer to the terminal and log file
+ipcMain.on('log-message', (_event, { level, message }) => {
+    logger.log(level, message);
 });
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
