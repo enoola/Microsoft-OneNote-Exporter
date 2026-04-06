@@ -500,7 +500,10 @@ async function runExport(options = {}) {
  * @param {object} ipcMain     - electron ipcMain for section-lock round-trips
  */
 async function runExportForElectron(options = {}, sendEvent, ipcMain) {
-    const log = (level, message) => sendEvent('log', { level, message });
+    const log = (level, message) => {
+        sendEvent('log', { level, message });
+        logger.log(level, message);
+    };
     // Download timeout in ms — user-configurable, default 60 s
     const downloadTimeout = options.downloadTimeout || 60000;
     // Shared onError callback that routes download failures to the GUI log

@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @param {...any} args
      */
     send: (channel, ...args) => {
-        const allowed = ['otc-reply', 'manual-login-confirmed', 'section-unlocked'];
+        const allowed = ['otc-reply', 'manual-login-confirmed', 'section-unlocked', 'log-message'];
         if (allowed.includes(channel)) {
             ipcRenderer.send(channel, ...args);
         }

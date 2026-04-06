@@ -560,7 +560,10 @@ async function loginForElectron(credentials = {}, sendEvent, ipcMain) {
     const isAutomated = !!(email && password);
     const headless = !credentials.notheadless && isAutomated;
 
-    const log = (level, message) => sendEvent('log', { level, message });
+    const log = (level, message) => {
+        sendEvent('log', { level, message });
+        logger.log(level, message);
+    };
 
     log('debug', 'Authentication Module: Version 4.4-DEBUG starting (Electron mode)...');
 

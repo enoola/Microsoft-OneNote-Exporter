@@ -5,6 +5,7 @@ const path = require('path');
 class Logger {
     constructor() {
         this.months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        this.logFilePath = path.resolve(__dirname, '../../logs/app.log');
         
         // Initialize dump directory name once per execution
         const now = new Date();
@@ -16,6 +17,9 @@ class Logger {
         
         // Format: YYYY-MM-DD_HHhMM (as per user request "h" vs ":" and "no single digits")
         this.dumpSubDir = `${yyyy}-${mm}-${dd}_${hh}h${min}`;
+
+        // Ensure logs directory exists
+        fs.ensureDirSync(path.dirname(this.logFilePath));
     }
 
     _getTimestamp() {
@@ -45,26 +49,65 @@ class Logger {
         return `logs/dumps/${this.dumpSubDir}`;
     }
 
+    _stripColors(str) {
+        // eslint-disable-next-line no-control-regex
+        return str.replace(/\u001b\[[0-9;]*m/g, '');
+    }
+
     _formatMessage(level, message, colorFunc = (m) => m) {
-        const timestamp = chalk.gray(this._getTimestamp());
-        const levelTag = colorFunc(`[${level}]`);
+        const timestamp = this._getTimestamp();
+        const coloredTimestamp = chalk.gray(timestamp);
+        const levelTag = `[${level}]`;
+        const coloredLevelTag = colorFunc(levelTag);
 
         // Handle multi-line messages
+        let formattedMessage = '';
         if (typeof message === 'string' && message.includes('\n')) {
-            return message.split('\n').map(line => `${timestamp} ${levelTag} ${line}`).join('\n');
-        }
-
-        // Handle objects/errors
-        if (typeof message !== 'string') {
+            formattedMessage = message.split('\n').map(line => `${coloredTimestamp} ${coloredLevelTag} ${line}`).join('\n');
+        } else if (typeof message !== 'string') {
+            // Handle objects/errors
             try {
                 const stringified = JSON.stringify(message, null, 2);
-                return `${timestamp} ${levelTag} ${stringified}`;
+                formattedMessage = `${coloredTimestamp} ${coloredLevelTag} ${stringified}`;
             } catch (e) {
-                return `${timestamp} ${levelTag} [Complex Object]`;
+                formattedMessage = `${coloredTimestamp} ${coloredLevelTag} [Complex Object]`;
             }
+        } else {
+            formattedMessage = `${coloredTimestamp} ${coloredLevelTag} ${message}`;
         }
 
-        return `${timestamp} ${levelTag} ${message}`;
+        // Write to log file (no colors)
+        const plainTimestamp = timestamp;
+        const plainLevelTag = levelTag;
+        let plainMessage = '';
+        
+        if (typeof message === 'string' && message.includes('\n')) {
+            plainMessage = message.split('\n').map(line => `${plainTimestamp} ${plainLevelTag} ${line}`).join('\n');
+        } else if (typeof message !== 'string') {
+            try {
+                const stringified = JSON.stringify(message, null, 2);
+                plainMessage = `${plainTimestamp} ${plainLevelTag} ${stringified}`;
+            } catch (e) {
+                plainMessage = `${plainTimestamp} ${plainLevelTag} [Complex Object]`;
+            }
+        } else {
+            plainMessage = `${plainTimestamp} ${plainLevelTag} ${message}`;
+        }
+
+        // Append to log file
+        fs.appendFileSync(this.logFilePath, plainMessage + '\n');
+
+        return formattedMessage;
+    }
+
+    /** Generic log method for IPC or programmatic use */
+    log(level, message) {
+        const lv = (level || 'info').toLowerCase();
+        if (this[lv] && typeof this[lv] === 'function') {
+            this[lv](message);
+        } else {
+            this.info(message);
+        }
     }
 
     info(message) {
@@ -79,7 +122,10 @@ class Logger {
         process.stderr.write(this._formatMessage('ERROR', message, chalk.red) + '\n');
         if (error) {
             if (error.stack) {
-                process.stderr.write(chalk.red(error.stack) + '\n');
+                const stack = chalk.red(error.stack);
+                process.stderr.write(stack + '\n');
+                // Also write stack to file
+                fs.appendFileSync(this.logFilePath, this._stripColors(stack) + '\n');
             } else {
                 process.stderr.write(this._formatMessage('ERROR', error, chalk.red) + '\n');
             }
