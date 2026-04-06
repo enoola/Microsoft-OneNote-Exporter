@@ -107,7 +107,7 @@ async function listNotebooks(options = {}) {
         await dismissMcasInterstitial(page);
 
         // Extra grace period for SPA JS rendering
-        logger.info('Waiting 5 seconds for dynamic content to render...');
+        logger.info('Will wait 5 seconds to let the document load properly');
         await page.waitForTimeout(5000);
 
         // Dump main page content if requested
@@ -198,6 +198,7 @@ async function listNotebooks(options = {}) {
 
             if (i < maxRetries - 1) {
                 logger.debug('No notebooks found yet, waiting 5 seconds...');
+                logger.info('Will wait 5 seconds to let the document load properly');
                 await page.waitForTimeout(5000);
             }
         }
@@ -249,6 +250,7 @@ async function openNotebook(page, scrapeTarget, notebookId) {
         ]);
 
         logger.success('Notebook opened!');
+        logger.info('Will wait 5 seconds to let the document load properly');
         await page.waitForTimeout(5000);
 
     } catch (e) {
@@ -298,7 +300,7 @@ async function openNotebookByLink(options = {}) {
         await dismissMcasInterstitial(page);
 
         // Extra grace period for SPA JS rendering
-        logger.info('Waiting 5 seconds for dynamic content to render...');
+        logger.info('Will wait 5 seconds to let the document load properly');
         await page.waitForTimeout(5000);
 
         if (options.dodump) {

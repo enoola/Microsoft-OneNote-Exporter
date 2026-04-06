@@ -41,6 +41,7 @@ async function withRetry(fn, options = {}) {
 
             if (!silent) {
                 logger.warn(`${operationName} failed (attempt ${attempt}/${maxAttempts}): ${error.message}`);
+                logger.info(`Will wait ${delayMs / 1000} seconds to let the document load properly`);
                 logger.debug(`  Retrying in ${delayMs}ms...`);
             }
 
